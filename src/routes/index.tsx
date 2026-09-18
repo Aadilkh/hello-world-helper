@@ -1,24 +1,487 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { toast } from "sonner";
+import {
+  Clapperboard,
+  Sparkles,
+  Loader2,
+  Download,
+  Wand2,
+  Film,
+  RotateCcw,
+  History,
+} from "lucide-react";
+import { generateScript, createClipJob, getProject, listProjects } from "@/lib/video.functions";
+import type { ScriptScene, ClipRow } from "@/lib/video.functions";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "ReelBanao — AI Video Studio" },
+      {
+        name: "description",
+        content:
+          "Apna idea likhein aur AI aap ke liye script aur video bana de — Reels aur YouTube ke liye.",
+      },
+      { property: "og:title", content: "ReelBanao — AI Video Studio" },
+      {
+        property: "og:description",
+        content: "Idea se seedha video — AI script likhta hai, scenes generate karta hai.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
   component: Index,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
+type Project = {
+  id: string;
+  idea: string;
+  language: string;
+  quality: string;
+  aspect_ratio: string;
+  title: string | null;
+  hook: string | null;
+  scenes: ScriptScene[];
+};
+
 function Index() {
+  const qc = useQueryClient();
+  const [idea, setIdea] = useState("");
+  const [language, setLanguage] = useState<"urdu" | "english">("urdu");
+  const [quality, setQuality] = useState<"draft" | "hd">("draft");
+  const [aspectRatio, setAspectRatio] = useState<"9:16" | "16:9">("9:16");
+  const [writingScript, setWritingScript] = useState(false);
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [generatingAll, setGeneratingAll] = useState(false);
+
+  const projectsQ = useQuery({
+    queryKey: ["projects"],
+    queryFn: () => listProjects(),
+  });
+
+  const projectQ = useQuery({
+    queryKey: ["project", projectId],
+    enabled: !!projectId,
+    queryFn: () => getProject({ data: { projectId: projectId! } }),
+    refetchInterval: (query) => {
+      const clips = query.state.data?.clips ?? [];
+      return clips.some((c) => c.status === "in_progress" || c.status === "pending") ? 5000 : false;
+    },
+  });
+
+  const project = projectQ.data?.project as Project | undefined;
+  const clips = (projectQ.data?.clips ?? []) as ClipRow[];
+
+  async function handleGenerateScript() {
+    if (idea.trim().length < 3) {
+      toast.error("Pehle apna video idea likhein");
+      return;
+    }
+    setWritingScript(true);
+    try {
+      const res = await generateScript({ data: { idea: idea.trim(), language, quality, aspectRatio } });
+      setProjectId(res.project.id);
+      qc.invalidateQueries({ queryKey: ["projects"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Script nahi ban saki");
+    } finally {
+      setWritingScript(false);
+    }
+  }
+
+  async function generateScene(sceneIndex: number) {
+    if (!projectId) return;
+    try {
+      await createClipJob({ data: { projectId, sceneIndex } });
+      await qc.invalidateQueries({ queryKey: ["project", projectId] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Video start nahi hua");
+      qc.invalidateQueries({ queryKey: ["project", projectId] });
+    }
+  }
+
+  async function handleGenerateAll(scenes: ScriptScene[] | undefined) {
+    if (!projectId || !scenes) return;
+    setGeneratingAll(true);
+    for (let i = 0; i < scenes.length; i++) {
+      try {
+        await createClipJob({ data: { projectId, sceneIndex: i } });
+        await qc.invalidateQueries({ queryKey: ["project", projectId] });
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : `Scene ${i + 1} start nahi hua`);
+        break;
+      }
+    }
+    setGeneratingAll(false);
+  }
+
+  function resetToForm() {
+    setProjectId(null);
+    setIdea("");
+  }
+
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="sticky top-0 z-20 border-b border-border/60 bg-background/80 backdrop-blur">
+        <div className="mx-auto flex max-w-md items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <Clapperboard className="h-4 w-4" />
+            </span>
+            <span className="font-display text-lg font-bold tracking-tight">ReelBanao</span>
+          </div>
+          {project ? (
+            <Button variant="ghost" size="sm" onClick={resetToForm} className="gap-1.5">
+              <RotateCcw className="h-3.5 w-3.5" /> Naya video
+            </Button>
+          ) : null}
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-md px-4 pb-24 pt-5">
+        {!project ? (
+          <IdeaForm
+            idea={idea}
+            setIdea={setIdea}
+            language={language}
+            setLanguage={setLanguage}
+            quality={quality}
+            setQuality={setQuality}
+            aspectRatio={aspectRatio}
+            setAspectRatio={setAspectRatio}
+            loading={writingScript}
+            onSubmit={handleGenerateScript}
+          />
+        ) : (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-border bg-card p-4">
+              <h1 className="font-display text-xl font-bold leading-snug">{project.title}</h1>
+              {project.hook ? (
+                <p
+                  dir={project.language === "urdu" ? "rtl" : "ltr"}
+                  className="mt-2 text-sm text-muted-foreground"
+                >
+                  {project.hook}
+                </p>
+              ) : null}
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                <Badge>{project.aspect_ratio}</Badge>
+                <Badge>{project.quality === "hd" ? "HD 720p" : "Draft 360p"}</Badge>
+                <Badge>{project.language === "urdu" ? "اردو narration" : "English narration"}</Badge>
+              </div>
+            </div>
+
+            <Button
+              className="w-full gap-2"
+              disabled={generatingAll || clips.every((c) => c.status === "ready")}
+              onClick={() => handleGenerateAll(project.scenes)}
+            >
+              {generatingAll ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Wand2 className="h-4 w-4" />
+              )}
+              Sab scenes ke videos banao
+            </Button>
+
+            {projectQ.isLoading ? (
+              <div className="flex items-center justify-center py-10 text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin" />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {project.scenes.map((scene, i) => (
+                  <SceneCard
+                    key={i}
+                    index={i}
+                    scene={scene}
+                    clip={clips.find((c) => c.scene_index === i)}
+                    language={project.language}
+                    aspectRatio={project.aspect_ratio}
+                    onGenerate={() => generateScene(i)}
+                    generating={generatingAll}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <RecentProjects
+          projects={projectsQ.data?.projects ?? []}
+          onOpen={(id) => {
+            setProjectId(id);
+            window.scrollTo({ top: 0 });
+          }}
+        />
+      </main>
+    </div>
+  );
+}
+
+function Badge({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="rounded-full border border-border bg-muted/50 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+      {children}
+    </span>
+  );
+}
+
+function Chip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        "rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors " +
+        (active
+          ? "bg-primary text-primary-foreground"
+          : "border border-border bg-muted/40 text-muted-foreground")
+      }
     >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
+      {children}
+    </button>
+  );
+}
+
+function IdeaForm(props: {
+  idea: string;
+  setIdea: (v: string) => void;
+  language: "urdu" | "english";
+  setLanguage: (v: "urdu" | "english") => void;
+  quality: "draft" | "hd";
+  setQuality: (v: "draft" | "hd") => void;
+  aspectRatio: "9:16" | "16:9";
+  setAspectRatio: (v: "9:16" | "16:9") => void;
+  loading: boolean;
+  onSubmit: () => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="pt-2">
+        <h1 className="font-display text-2xl font-bold leading-tight">
+          Idea likho,{" "}
+          <span className="text-primary">video ban jayega</span>
+        </h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          AI aap ki script likhega, phir har scene ki video generate karega.
+        </p>
+      </div>
+
+      <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
+        <Textarea
+          value={props.idea}
+          onChange={(e) => props.setIdea(e.target.value)}
+          placeholder="Misal: Karachi ki barish par ek mazedaar reel — chai, pakora aur yaadein"
+          rows={4}
+          dir="auto"
+          className="resize-none border-border bg-muted/30 text-base"
+        />
+
+        <div className="space-y-2">
+          <Label>Narration ki zubaan</Label>
+          <div className="flex gap-2">
+            <Chip active={props.language === "urdu"} onClick={() => props.setLanguage("urdu")}>
+              اردو
+            </Chip>
+            <Chip active={props.language === "english"} onClick={() => props.setLanguage("english")}>
+              English
+            </Chip>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Format</Label>
+          <div className="flex gap-2">
+            <Chip active={props.aspectRatio === "9:16"} onClick={() => props.setAspectRatio("9:16")}>
+              Reels / TikTok
+            </Chip>
+            <Chip active={props.aspectRatio === "16:9"} onClick={() => props.setAspectRatio("16:9")}>
+              YouTube
+            </Chip>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Quality</Label>
+          <div className="flex gap-2">
+            <Chip active={props.quality === "draft"} onClick={() => props.setQuality("draft")}>
+              Draft (tez, sasta)
+            </Chip>
+            <Chip active={props.quality === "hd"} onClick={() => props.setQuality("hd")}>
+              HD 720p
+            </Chip>
+          </div>
+        </div>
+
+        <Button
+          className="w-full gap-2 text-base font-semibold"
+          size="lg"
+          disabled={props.loading}
+          onClick={props.onSubmit}
+        >
+          {props.loading ? (
+            <Loader2 className="h-5 w-5 animate-spin" />
+          ) : (
+            <Sparkles className="h-5 w-5" />
+          )}
+          {props.loading ? "AI script likh raha hai..." : "Script banao"}
+        </Button>
+        {props.loading ? (
+          <p className="text-center text-xs text-muted-foreground">
+            30 second se 1 minute lag sakta hai
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function Label({ children }: { children: React.ReactNode }) {
+  return <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{children}</div>;
+}
+
+function SceneCard({
+  index,
+  scene,
+  clip,
+  language,
+  aspectRatio,
+  onGenerate,
+  generating,
+}: {
+  index: number;
+  scene: ScriptScene;
+  clip?: ClipRow;
+  language: string;
+  aspectRatio: string;
+  onGenerate: () => void;
+  generating: boolean;
+}) {
+  const status = clip?.status ?? "none";
+  const rtl = language === "urdu";
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border bg-card">
+      <div className="flex items-center justify-between px-4 pt-3">
+        <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary">
+          <Film className="h-3.5 w-3.5" /> Scene {index + 1}
+        </span>
+        <span className="text-xs text-muted-foreground">{scene.durationSeconds}s</span>
+      </div>
+      <div className="px-4 pt-2">
+        <p
+          dir={rtl ? "rtl" : "ltr"}
+          className={"text-[15px] font-medium leading-relaxed " + (rtl ? "text-right" : "text-left")}
+        >
+          {scene.narration}
+        </p>
+        <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground" dir="ltr">
+          {scene.visual}
+        </p>
+      </div>
+
+      <div className="mt-3">
+        {status === "ready" && clip.url ? (
+          <div className="space-y-2">
+            <video
+              src={clip.url}
+              controls
+              loop
+              playsInline
+              className={
+                "w-full bg-black " + (aspectRatio === "9:16" ? "aspect-[9/16] object-cover" : "aspect-video")
+              }
+            />
+            <div className="px-4 pb-4">
+              <a
+                href={clip.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-primary"
+              >
+                <Download className="h-4 w-4" /> Download karein
+              </a>
+            </div>
+          </div>
+        ) : status === "in_progress" || status === "pending" ? (
+          <div className="px-4 pb-4">
+            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+              <div className="progress-bar h-full rounded-full bg-primary" />
+            </div>
+            <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Video ban raha hai — 1 se 3 minute lagte hain
+            </p>
+          </div>
+        ) : status === "failed" ? (
+          <div className="px-4 pb-4">
+            <p className="text-xs text-destructive">{clip?.error ?? "Video fail ho gaya"}</p>
+            <Button size="sm" variant="outline" className="mt-2 gap-1.5" onClick={onGenerate}>
+              <RotateCcw className="h-3.5 w-3.5" /> Dobara koshish
+            </Button>
+          </div>
+        ) : (
+          <div className="px-4 pb-4">
+            <Button className="w-full gap-2" disabled={generating} onClick={onGenerate}>
+              <Sparkles className="h-4 w-4" /> Video banao
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RecentProjects({
+  projects,
+  onOpen,
+}: {
+  projects: Array<{
+    id: string;
+    title: string | null;
+    idea: string;
+    total?: number;
+    ready?: number;
+  }>;
+  onOpen: (id: string) => void;
+}) {
+  if (projects.length === 0) return null;
+  return (
+    <div className="mt-10">
+      <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <History className="h-3.5 w-3.5" /> Purane videos
+      </div>
+      <div className="space-y-2">
+        {projects.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => onOpen(p.id)}
+            className="flex w-full items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-left"
+          >
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-medium">{p.title ?? p.idea}</span>
+              <span className="text-xs text-muted-foreground">
+                {p.ready ?? 0}/{p.total ?? 0} videos ready
+              </span>
+            </span>
+            <span className="ml-3 shrink-0 text-xs font-medium text-primary">Kholein</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
