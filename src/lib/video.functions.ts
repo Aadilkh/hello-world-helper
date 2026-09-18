@@ -232,7 +232,13 @@ export const createClipJob = createServerFn({ method: "POST" })
     if (existing?.status === "in_progress" && existing.job_id) return { clip: existing };
     if (existing?.status === "ready") return { clip: existing };
 
-    const langName = project.language === "english" ? "English" : "Urdu";
+    const rawLang = (project.language ?? "urdu").trim();
+    const langName =
+      rawLang.toLowerCase() === "urdu"
+        ? "Urdu"
+        : rawLang.toLowerCase() === "english"
+          ? "English"
+          : rawLang.charAt(0).toUpperCase() + rawLang.slice(1);
     const videoPrompt = [
       scene.visual.trim() + ".",
       `The narrator says in ${langName}: ${scene.narration}`,
