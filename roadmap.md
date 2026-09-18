@@ -1,17 +1,17 @@
 # Vision Pilot Dev Master — Task List
 
 ## Done
-- [x] Script generation (Lovable AI, gpt-6-astra) — tested live
-- [x] Video generation (gemini-omni-1.1-flash) — tested live
+- [x] Script generation (Lovable AI, gpt-6-astra) — live tested
+- [x] Video generation (gemini-omni-1.1-flash) — live tested
 - [x] Signed video URLs + Download link
-- [x] Toaster mounted, build OK
+- [x] DB columns: platform, audience, niche, monetization, research, ref photos, voice note
+- [x] Research brain server code (web research + monetization-first plan) — untested
 
-## Open (new direction: Vision Pilot Dev Master)
-- [ ] Rebrand app: "Vision Pilot Dev Master"
-- [ ] Chat-box driven studio (command in any language, agent replies in chat)
-- [ ] Research brain: web search + competitor/platform content research, evidence in chat
-- [ ] Monetization guard: platform rules + RPM-aware niche/format plan (no zero-earning content)
-- [ ] Niche presets: travel vlogs (US/UK/CA/AU western realistic), coding/IT courses for Japanese audience
-- [ ] Platform targets: YouTube, Facebook, TikTok, Instagram, X (aspect + length per platform)
-- [ ] Attachments in chat: idea text, reference photos, voice samples
-- [ ] Multi-language narration output
+## Open (is turn)
+- [ ] Video card: real-time progress bar (percent + elapsed) aur download button
+- [ ] Per-scene resolution (360p/720p/1080p) aur length (3-10s) options
+
+## Open (baad mein)
+- [ ] Chat-box studio UI (evidence + monetization plan + attachments)
+- [ ] Reference photo ko video mein use karna, voice style note
+- [ ] Cell 8 — self-upgrade engine: capability registry, gap discovery, research, sandbox mein nayi capability, validation + registration (user ka Python script reference)
