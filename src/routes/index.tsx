@@ -208,7 +208,7 @@ function Index() {
                     clip={clips.find((c) => c.scene_index === i)}
                     language={project.language}
                     aspectRatio={project.aspect_ratio}
-                    onGenerate={() => generateScene(i)}
+                    onGenerate={(opts) => generateScene(i, opts)}
                     generating={generatingAll}
                   />
                 ))}
@@ -359,6 +359,27 @@ function Label({ children }: { children: React.ReactNode }) {
   return <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{children}</div>;
 }
 
+type ClipOptions = { resolution: "360p" | "720p" | "1080p"; durationSeconds: number };
+
+function useElapsed(startedAt: string | null | undefined, active: boolean) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [active]);
+  if (!startedAt) return 0;
+  const started = new Date(startedAt).getTime();
+  if (!Number.isFinite(started)) return 0;
+  return Math.max(0, Math.round((now - started) / 1000));
+}
+
+function fmtTime(sec: number) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 function SceneCard({
   index,
   scene,
@@ -373,11 +394,21 @@ function SceneCard({
   clip?: ClipRow | undefined;
   language: string;
   aspectRatio: string;
-  onGenerate: () => void;
+  onGenerate: (opts: ClipOptions) => void;
   generating: boolean;
 }) {
   const status = clip?.status ?? "none";
   const rtl = language === "urdu";
+  const [resolution, setResolution] = useState<"360p" | "720p" | "1080p">(
+    (clip?.resolution as "360p" | "720p" | "1080p") ?? "360p",
+  );
+  const [duration, setDuration] = useState<number>(
+    clip?.duration_seconds ?? Math.min(10, Math.max(3, scene.durationSeconds || 8)),
+  );
+  const working = status === "in_progress" || status === "pending";
+  const elapsed = useElapsed(clip?.started_at, working);
+  const pct = working ? Math.max(clip?.progress ?? 5, Math.min(95, 5 + elapsed * 1.2)) : 0;
+
 
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-card">
