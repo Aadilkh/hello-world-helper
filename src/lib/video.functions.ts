@@ -92,8 +92,8 @@ function normalizeScenes(raw: unknown): ScriptScene[] {
   for (const item of raw) {
     if (!item || typeof item !== "object") continue;
     const o = item as Record<string, unknown>;
-    const visual = typeof o.visual === "string" ? o.visual : "";
-    const narration = typeof o.narration === "string" ? o.narration : "";
+    const visual = typeof o["visual"] === "string" ? o["visual"] : "";
+    const narration = typeof o["narration"] === "string" ? o["narration"] : "";
     if (!visual) continue;
     const dur = Number(o["durationSeconds"] ?? o["duration_seconds"] ?? 8);
     scenes.push({
