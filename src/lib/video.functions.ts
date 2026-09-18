@@ -20,6 +20,8 @@ export type ClipRow = {
   resolution: string;
   storage_path: string | null;
   duration_seconds: number;
+  progress: number;
+  started_at: string | null;
   url: string | null;
 };
 
