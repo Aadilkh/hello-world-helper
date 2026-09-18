@@ -71,15 +71,15 @@ async function callResponses(body: Record<string, unknown>): Promise<string> {
       } catch {
         continue;
       }
-      if (evt.type === "response.output_text.delta" && typeof evt.delta === "string") {
-        text += evt.delta;
-      } else if (evt.type === "response.failed") {
-        const respErr = (evt.response as Record<string, unknown> | undefined)?.error as
+      if (evt["type"] === "response.output_text.delta" && typeof evt["delta"] === "string") {
+        text += evt["delta"];
+      } else if (evt["type"] === "response.failed") {
+        const respErr = (evt["response"] as Record<string, unknown> | undefined)?.["error"] as
           | Record<string, unknown>
           | undefined;
-        throw new Error((respErr?.message as string | undefined) ?? "AI ne script nahi bana saki");
-      } else if (evt.type === "error") {
-        throw new Error((evt.message as string | undefined) ?? "AI request failed");
+        throw new Error((respErr?.["message"] as string | undefined) ?? "AI ne script nahi bana saki");
+      } else if (evt["type"] === "error") {
+        throw new Error((evt["message"] as string | undefined) ?? "AI request failed");
       }
     }
   }
