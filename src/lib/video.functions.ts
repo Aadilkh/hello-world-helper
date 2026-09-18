@@ -204,6 +204,8 @@ export const generateScript = createServerFn({ method: "POST" })
 const CreateClipInput = z.object({
   projectId: z.string().uuid(),
   sceneIndex: z.number().int().min(0).max(9),
+  resolution: z.enum(["360p", "720p", "1080p"]).optional(),
+  durationSeconds: z.number().int().min(3).max(10).optional(),
 });
 
 export const createClipJob = createServerFn({ method: "POST" })
