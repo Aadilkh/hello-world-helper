@@ -20,6 +20,8 @@ export type ClipRow = {
   resolution: string;
   storage_path: string | null;
   duration_seconds: number;
+  progress: number;
+  started_at: string | null;
   url: string | null;
 };
 
@@ -202,6 +204,8 @@ export const generateScript = createServerFn({ method: "POST" })
 const CreateClipInput = z.object({
   projectId: z.string().uuid(),
   sceneIndex: z.number().int().min(0).max(9),
+  resolution: z.enum(["360p", "720p", "1080p"]).optional(),
+  durationSeconds: z.number().int().min(3).max(10).optional(),
 });
 
 export const createClipJob = createServerFn({ method: "POST" })
@@ -228,7 +232,13 @@ export const createClipJob = createServerFn({ method: "POST" })
     if (existing?.status === "in_progress" && existing.job_id) return { clip: existing };
     if (existing?.status === "ready") return { clip: existing };
 
-    const langName = project.language === "english" ? "English" : "Urdu";
+    const rawLang = (project.language ?? "urdu").trim();
+    const langName =
+      rawLang.toLowerCase() === "urdu"
+        ? "Urdu"
+        : rawLang.toLowerCase() === "english"
+          ? "English"
+          : rawLang.charAt(0).toUpperCase() + rawLang.slice(1);
     const videoPrompt = [
       scene.visual.trim() + ".",
       `The narrator says in ${langName}: ${scene.narration}`,
@@ -236,8 +246,11 @@ export const createClipJob = createServerFn({ method: "POST" })
       "In a single continuous shot, no scene cuts. No captions, no on-screen text.",
     ].join(" ");
 
-    const duration = Math.min(10, Math.max(3, Math.round(scene.durationSeconds || 8)));
-    const resolution = project.quality === "hd" ? "720p" : "360p";
+    const duration = Math.min(
+      10,
+      Math.max(3, Math.round(data.durationSeconds ?? scene.durationSeconds ?? 8)),
+    );
+    const resolution = data.resolution ?? (project.quality === "hd" ? "720p" : "360p");
 
     // Upsert the clip row first so a failed create is visible as failed.
     let clip = existing;
@@ -251,11 +264,17 @@ export const createClipJob = createServerFn({ method: "POST" })
           duration_seconds: duration,
           resolution,
           status: "pending",
+          progress: 0,
         })
         .select("*")
         .single();
       if (error) throw new Error(error.message);
       clip = created;
+    } else {
+      await supabaseAdmin
+        .from("video_clips")
+        .update({ duration_seconds: duration, resolution, prompt: videoPrompt })
+        .eq("id", clip.id);
     }
 
     const res = await fetch(`${GATEWAY}/videos`, {
@@ -287,7 +306,13 @@ export const createClipJob = createServerFn({ method: "POST" })
 
     const { data: updated, error } = await supabaseAdmin
       .from("video_clips")
-      .update({ job_id: job.id, status: "in_progress", error: null })
+      .update({
+        job_id: job.id,
+        status: "in_progress",
+        error: null,
+        progress: 5,
+        started_at: new Date().toISOString(),
+      })
       .eq("id", clip.id)
       .select("*")
       .single();
@@ -310,6 +335,8 @@ type DbClip = {
   error: string | null;
   resolution: string;
   storage_path: string | null;
+  progress: number;
+  started_at: string | null;
 };
 
 async function syncClip(clip: DbClip): Promise<DbClip> {
@@ -320,8 +347,25 @@ async function syncClip(clip: DbClip): Promise<DbClip> {
   if (!res.ok) return clip; // transient — try again on next poll
   const job = (await res.json()) as {
     status?: string;
+    progress?: number;
     error?: { code?: string; message?: string };
   };
+
+  if (job.status === "in_progress" || job.status === "queued") {
+    const pct = Math.min(95, Math.max(5, Math.round(Number(job.progress) || 0)));
+    if (pct !== clip.progress) {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: updated } = await supabaseAdmin
+        .from("video_clips")
+        .update({ progress: pct })
+        .eq("id", clip.id)
+        .select("*")
+        .single();
+      return (updated as unknown as DbClip | null) ?? clip;
+    }
+    return clip;
+  }
+
 
   if (job.status === "completed") {
     const videoRes = await fetch(`${GATEWAY}/videos/${clip.job_id}/content`, {
@@ -336,7 +380,7 @@ async function syncClip(clip: DbClip): Promise<DbClip> {
         .upload(path, bytes, { contentType: "video/mp4", upsert: true });
       const { data: updated } = await supabaseAdmin
         .from("video_clips")
-        .update({ status: "ready", storage_path: path, error: null })
+        .update({ status: "ready", storage_path: path, error: null, progress: 100 })
         .eq("id", clip.id as string)
         .select("*")
         .single();
@@ -401,6 +445,8 @@ export const getProject = createServerFn({ method: "GET" })
         resolution: clip.resolution as string,
         storage_path: storagePath,
         duration_seconds: clip.duration_seconds as number,
+        progress: (clip.progress as number | null) ?? 0,
+        started_at: (clip.started_at as string | null) ?? null,
         url,
       });
     }

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   Clapperboard,
@@ -94,10 +94,13 @@ function Index() {
     }
   }
 
-  async function generateScene(sceneIndex: number) {
+  async function generateScene(
+    sceneIndex: number,
+    opts?: { resolution: "360p" | "720p" | "1080p"; durationSeconds: number },
+  ) {
     if (!projectId) return;
     try {
-      await createClipJob({ data: { projectId, sceneIndex } });
+      await createClipJob({ data: { projectId, sceneIndex, ...(opts ?? {}) } });
       await qc.invalidateQueries({ queryKey: ["project", projectId] });
       qc.invalidateQueries({ queryKey: ["projects"] });
     } catch (e) {
@@ -205,7 +208,7 @@ function Index() {
                     clip={clips.find((c) => c.scene_index === i)}
                     language={project.language}
                     aspectRatio={project.aspect_ratio}
-                    onGenerate={() => generateScene(i)}
+                    onGenerate={(opts) => generateScene(i, opts)}
                     generating={generatingAll}
                   />
                 ))}
@@ -356,6 +359,27 @@ function Label({ children }: { children: React.ReactNode }) {
   return <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{children}</div>;
 }
 
+type ClipOptions = { resolution: "360p" | "720p" | "1080p"; durationSeconds: number };
+
+function useElapsed(startedAt: string | null | undefined, active: boolean) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [active]);
+  if (!startedAt) return 0;
+  const started = new Date(startedAt).getTime();
+  if (!Number.isFinite(started)) return 0;
+  return Math.max(0, Math.round((now - started) / 1000));
+}
+
+function fmtTime(sec: number) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 function SceneCard({
   index,
   scene,
@@ -370,11 +394,21 @@ function SceneCard({
   clip?: ClipRow | undefined;
   language: string;
   aspectRatio: string;
-  onGenerate: () => void;
+  onGenerate: (opts: ClipOptions) => void;
   generating: boolean;
 }) {
   const status = clip?.status ?? "none";
   const rtl = language === "urdu";
+  const [resolution, setResolution] = useState<"360p" | "720p" | "1080p">(
+    (clip?.resolution as "360p" | "720p" | "1080p") ?? "360p",
+  );
+  const [duration, setDuration] = useState<number>(
+    clip?.duration_seconds ?? Math.min(10, Math.max(3, scene.durationSeconds || 8)),
+  );
+  const working = status === "in_progress" || status === "pending";
+  const elapsed = useElapsed(clip?.started_at, working);
+  const pct = working ? Math.max(clip?.progress ?? 5, Math.min(95, 5 + elapsed * 1.2)) : 0;
+
 
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-card">
@@ -382,7 +416,9 @@ function SceneCard({
         <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary">
           <Film className="h-3.5 w-3.5" /> Scene {index + 1}
         </span>
-        <span className="text-xs text-muted-foreground">{scene.durationSeconds}s</span>
+        <span className="text-xs text-muted-foreground">
+          {clip?.duration_seconds ?? duration}s · {clip?.resolution ?? resolution}
+        </span>
       </div>
       <div className="px-4 pt-2">
         <p
@@ -408,36 +444,78 @@ function SceneCard({
                 "w-full bg-black " + (aspectRatio === "9:16" ? "aspect-[9/16] object-cover" : "aspect-video")
               }
             />
-            <div className="px-4 pb-4">
-              <a
-                href={clip.url ?? "#"}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-primary"
+            <div className="flex items-center gap-2 px-4 pb-4">
+              <Button asChild className="flex-1 gap-2">
+                <a href={clip.url ?? "#"} download={`scene-${index + 1}.mp4`} target="_blank" rel="noreferrer">
+                  <Download className="h-4 w-4" /> Video download karein
+                </a>
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                title="Dobara banao"
+                onClick={() => onGenerate({ resolution, durationSeconds: duration })}
               >
-                <Download className="h-4 w-4" /> Download karein
-              </a>
+                <RotateCcw className="h-4 w-4" />
+              </Button>
             </div>
           </div>
-        ) : status === "in_progress" || status === "pending" ? (
+        ) : working ? (
           <div className="px-4 pb-4">
-            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-              <div className="progress-bar h-full rounded-full bg-primary" />
+            <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary transition-all duration-700 ease-out"
+                style={{ width: `${Math.round(pct)}%` }}
+              />
             </div>
-            <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Video ban raha hai — 1 se 3 minute lagte hain
-            </p>
+            <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Video ban raha hai… {Math.round(pct)}%
+              </span>
+              <span className="tabular-nums">{fmtTime(elapsed)}</span>
+            </div>
           </div>
         ) : status === "failed" ? (
           <div className="px-4 pb-4">
             <p className="text-xs text-destructive">{clip?.error ?? "Video fail ho gaya"}</p>
-            <Button size="sm" variant="outline" className="mt-2 gap-1.5" onClick={onGenerate}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-2 gap-1.5"
+              onClick={() => onGenerate({ resolution, durationSeconds: duration })}
+            >
               <RotateCcw className="h-3.5 w-3.5" /> Dobara koshish
             </Button>
           </div>
         ) : (
-          <div className="px-4 pb-4">
-            <Button className="w-full gap-2" disabled={generating} onClick={onGenerate}>
+          <div className="space-y-3 px-4 pb-4">
+            <div className="space-y-2">
+              <Label>Quality</Label>
+              <div className="flex gap-2">
+                {(["360p", "720p", "1080p"] as const).map((r) => (
+                  <Chip key={r} active={resolution === r} onClick={() => setResolution(r)}>
+                    {r === "360p" ? "360p (sasta)" : r}
+                  </Chip>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Lambai — {duration} second</Label>
+              <input
+                type="range"
+                min={3}
+                max={10}
+                step={1}
+                value={duration}
+                onChange={(e) => setDuration(Number(e.target.value))}
+                className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
+              />
+            </div>
+            <Button
+              className="w-full gap-2"
+              disabled={generating}
+              onClick={() => onGenerate({ resolution, durationSeconds: duration })}
+            >
               <Sparkles className="h-4 w-4" /> Video banao
             </Button>
           </div>
