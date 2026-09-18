@@ -395,10 +395,10 @@ function SceneCard({
       </div>
 
       <div className="mt-3">
-        {status === "ready" && clip.url ? (
+        {status === "ready" && clip ? (
           <div className="space-y-2">
             <video
-              src={clip.url}
+              src={clip.url ?? undefined}
               controls
               loop
               playsInline
@@ -408,7 +408,7 @@ function SceneCard({
             />
             <div className="px-4 pb-4">
               <a
-                href={clip.url}
+                href={clip.url ?? "#"}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-1.5 text-sm font-medium text-primary"
