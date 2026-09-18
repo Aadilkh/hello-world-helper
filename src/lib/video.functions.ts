@@ -317,7 +317,6 @@ async function syncClip(clip: Record<string, unknown>): Promise<Record<string, u
     if (videoRes.ok) {
       const bytes = new Uint8Array(await videoRes.arrayBuffer());
       const path = `clips/${clip.id}.mp4`;
-      const { supabaseAdminRef } = { supabaseAdminRef: null } as never as Record<string, never>;
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       await supabaseAdmin.storage
         .from("generated-videos")
