@@ -1,8 +1,12 @@
-# Roadmap
+# ReelBanao — Task List
 
-- [ ] AI Video Creator app (in progress)
-  - [ ] Database migration: video_projects + video_clips tables
-  - [ ] Storage bucket for generated videos
-  - [ ] Server functions: script generation, video job create/poll/store
-  - [ ] Mobile-first studio UI (idea → script → scenes → videos)
-- [ ] Ask user about their Replit project — reuse idea/code if they want
+## Done
+- [x] Script generation (Lovable AI, gpt-6-astra) — tested live, Urdu script generated
+- [x] Video generation (gemini-omni-1.1-flash) — tested live, scene 1 video ready in ~70s
+- [x] Signed video URLs + Download link — verified
+- [x] Toaster mounted in root
+- [x] All type errors fixed, build OK
+- [x] Recent projects list refreshes after clip jobs
+
+## Open
+- [ ] User ka Replit idea/code share karna — waiting on user
