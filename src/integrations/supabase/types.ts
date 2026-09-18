@@ -67,36 +67,60 @@ export type Database = {
       video_projects: {
         Row: {
           aspect_ratio: string
+          audience: string | null
+          command: string | null
           created_at: string
           hook: string | null
           id: string
           idea: string
           language: string
+          monetization: Json
+          niche: string | null
+          platform: string
           quality: string
+          ref_image_paths: string[]
+          research: Json
           scenes: Json
           title: string | null
+          voice_note: string | null
         }
         Insert: {
           aspect_ratio?: string
+          audience?: string | null
+          command?: string | null
           created_at?: string
           hook?: string | null
           id?: string
           idea: string
           language?: string
+          monetization?: Json
+          niche?: string | null
+          platform?: string
           quality?: string
+          ref_image_paths?: string[]
+          research?: Json
           scenes?: Json
           title?: string | null
+          voice_note?: string | null
         }
         Update: {
           aspect_ratio?: string
+          audience?: string | null
+          command?: string | null
           created_at?: string
           hook?: string | null
           id?: string
           idea?: string
           language?: string
+          monetization?: Json
+          niche?: string | null
+          platform?: string
           quality?: string
+          ref_image_paths?: string[]
+          research?: Json
           scenes?: Json
           title?: string | null
+          voice_note?: string | null
         }
         Relationships: []
       }
