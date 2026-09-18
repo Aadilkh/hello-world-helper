@@ -94,10 +94,13 @@ function Index() {
     }
   }
 
-  async function generateScene(sceneIndex: number) {
+  async function generateScene(
+    sceneIndex: number,
+    opts?: { resolution: "360p" | "720p" | "1080p"; durationSeconds: number },
+  ) {
     if (!projectId) return;
     try {
-      await createClipJob({ data: { projectId, sceneIndex } });
+      await createClipJob({ data: { projectId, sceneIndex, ...(opts ?? {}) } });
       await qc.invalidateQueries({ queryKey: ["project", projectId] });
       qc.invalidateQueries({ queryKey: ["projects"] });
     } catch (e) {
