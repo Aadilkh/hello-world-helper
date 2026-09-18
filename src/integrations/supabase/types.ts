@@ -14,7 +14,92 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      video_clips: {
+        Row: {
+          created_at: string
+          duration_seconds: number
+          error: string | null
+          id: string
+          job_id: string | null
+          project_id: string
+          prompt: string
+          resolution: string
+          scene_index: number
+          status: string
+          storage_path: string | null
+        }
+        Insert: {
+          created_at?: string
+          duration_seconds?: number
+          error?: string | null
+          id?: string
+          job_id?: string | null
+          project_id: string
+          prompt: string
+          resolution?: string
+          scene_index: number
+          status?: string
+          storage_path?: string | null
+        }
+        Update: {
+          created_at?: string
+          duration_seconds?: number
+          error?: string | null
+          id?: string
+          job_id?: string | null
+          project_id?: string
+          prompt?: string
+          resolution?: string
+          scene_index?: number
+          status?: string
+          storage_path?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "video_clips_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "video_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      video_projects: {
+        Row: {
+          aspect_ratio: string
+          created_at: string
+          hook: string | null
+          id: string
+          idea: string
+          language: string
+          quality: string
+          scenes: Json
+          title: string | null
+        }
+        Insert: {
+          aspect_ratio?: string
+          created_at?: string
+          hook?: string | null
+          id?: string
+          idea: string
+          language?: string
+          quality?: string
+          scenes?: Json
+          title?: string | null
+        }
+        Update: {
+          aspect_ratio?: string
+          created_at?: string
+          hook?: string | null
+          id?: string
+          idea?: string
+          language?: string
+          quality?: string
+          scenes?: Json
+          title?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
