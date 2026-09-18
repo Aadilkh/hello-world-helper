@@ -95,7 +95,7 @@ function normalizeScenes(raw: unknown): ScriptScene[] {
     const visual = typeof o.visual === "string" ? o.visual : "";
     const narration = typeof o.narration === "string" ? o.narration : "";
     if (!visual) continue;
-    const dur = Number(o.durationSeconds ?? o.duration_seconds ?? 8);
+    const dur = Number(o["durationSeconds"] ?? o["duration_seconds"] ?? 8);
     scenes.push({
       visual,
       narration,
@@ -177,7 +177,7 @@ export const generateScript = createServerFn({ method: "POST" })
       throw new Error("Script parse nahi ho saki — dobara koshish karein");
     }
 
-    const scenes = normalizeScenes(parsed.scenes);
+    const scenes = normalizeScenes(parsed["scenes"]);
     if (scenes.length === 0) throw new Error("AI ne empty script di — dobara koshish karein");
 
     const { data: project, error } = await supabaseAdmin
@@ -187,8 +187,8 @@ export const generateScript = createServerFn({ method: "POST" })
         language: data.language,
         quality: data.quality,
         aspect_ratio: data.aspectRatio,
-        title: typeof parsed.title === "string" ? parsed.title : data.idea.slice(0, 80),
-        hook: typeof parsed.hook === "string" ? parsed.hook : "",
+        title: typeof parsed["title"] === "string" ? parsed["title"] : data.idea.slice(0, 80),
+        hook: typeof parsed["hook"] === "string" ? parsed["hook"] : "",
         scenes,
       })
       .select("*")
