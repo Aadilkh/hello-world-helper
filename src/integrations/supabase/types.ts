@@ -21,10 +21,12 @@ export type Database = {
           error: string | null
           id: string
           job_id: string | null
+          progress: number
           project_id: string
           prompt: string
           resolution: string
           scene_index: number
+          started_at: string | null
           status: string
           storage_path: string | null
         }
@@ -34,10 +36,12 @@ export type Database = {
           error?: string | null
           id?: string
           job_id?: string | null
+          progress?: number
           project_id: string
           prompt: string
           resolution?: string
           scene_index: number
+          started_at?: string | null
           status?: string
           storage_path?: string | null
         }
@@ -47,10 +51,12 @@ export type Database = {
           error?: string | null
           id?: string
           job_id?: string | null
+          progress?: number
           project_id?: string
           prompt?: string
           resolution?: string
           scene_index?: number
+          started_at?: string | null
           status?: string
           storage_path?: string | null
         }
