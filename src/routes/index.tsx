@@ -365,7 +365,7 @@ function SceneCard({
 }: {
   index: number;
   scene: ScriptScene;
-  clip?: ClipRow;
+  clip?: ClipRow | undefined;
   language: string;
   aspectRatio: string;
   onGenerate: () => void;

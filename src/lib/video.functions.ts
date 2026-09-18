@@ -299,7 +299,20 @@ export const createClipJob = createServerFn({ method: "POST" })
 
 const GetProjectInput = z.object({ projectId: z.string().uuid() });
 
-async function syncClip(clip: Record<string, unknown>): Promise<Record<string, unknown>> {
+type DbClip = {
+  id: string;
+  project_id: string;
+  scene_index: number;
+  prompt: string;
+  duration_seconds: number;
+  job_id: string | null;
+  status: string;
+  error: string | null;
+  resolution: string;
+  storage_path: string | null;
+};
+
+async function syncClip(clip: DbClip): Promise<DbClip> {
   if (clip.status !== "in_progress" || !clip.job_id) return clip;
   const res = await fetch(`${GATEWAY}/videos/${clip.job_id}`, {
     headers: gatewayHeaders(),
