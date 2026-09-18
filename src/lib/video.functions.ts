@@ -376,9 +376,9 @@ export const getProject = createServerFn({ method: "GET" })
       .eq("project_id", data.projectId)
       .order("scene_index", { ascending: true });
 
-    const synced = [];
+    const synced: DbClip[] = [];
     for (const clip of clips ?? []) {
-      synced.push(await syncClip(clip as Record<string, unknown>));
+      synced.push(await syncClip(clip as unknown as DbClip));
     }
 
     // Sign URLs for ready clips
