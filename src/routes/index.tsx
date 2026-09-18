@@ -99,6 +99,7 @@ function Index() {
     try {
       await createClipJob({ data: { projectId, sceneIndex } });
       await qc.invalidateQueries({ queryKey: ["project", projectId] });
+      qc.invalidateQueries({ queryKey: ["projects"] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Video start nahi hua");
       qc.invalidateQueries({ queryKey: ["project", projectId] });
@@ -112,6 +113,7 @@ function Index() {
       try {
         await createClipJob({ data: { projectId, sceneIndex: i } });
         await qc.invalidateQueries({ queryKey: ["project", projectId] });
+        qc.invalidateQueries({ queryKey: ["projects"] });
       } catch (e) {
         toast.error(e instanceof Error ? e.message : `Scene ${i + 1} start nahi hua`);
         break;
