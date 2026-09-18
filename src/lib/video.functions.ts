@@ -246,8 +246,11 @@ export const createClipJob = createServerFn({ method: "POST" })
       "In a single continuous shot, no scene cuts. No captions, no on-screen text.",
     ].join(" ");
 
-    const duration = Math.min(10, Math.max(3, Math.round(scene.durationSeconds || 8)));
-    const resolution = project.quality === "hd" ? "720p" : "360p";
+    const duration = Math.min(
+      10,
+      Math.max(3, Math.round(data.durationSeconds ?? scene.durationSeconds ?? 8)),
+    );
+    const resolution = data.resolution ?? (project.quality === "hd" ? "720p" : "360p");
 
     // Upsert the clip row first so a failed create is visible as failed.
     let clip = existing;
@@ -261,11 +264,17 @@ export const createClipJob = createServerFn({ method: "POST" })
           duration_seconds: duration,
           resolution,
           status: "pending",
+          progress: 0,
         })
         .select("*")
         .single();
       if (error) throw new Error(error.message);
       clip = created;
+    } else {
+      await supabaseAdmin
+        .from("video_clips")
+        .update({ duration_seconds: duration, resolution, prompt: videoPrompt })
+        .eq("id", clip.id);
     }
 
     const res = await fetch(`${GATEWAY}/videos`, {
