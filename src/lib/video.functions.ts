@@ -306,7 +306,13 @@ export const createClipJob = createServerFn({ method: "POST" })
 
     const { data: updated, error } = await supabaseAdmin
       .from("video_clips")
-      .update({ job_id: job.id, status: "in_progress", error: null })
+      .update({
+        job_id: job.id,
+        status: "in_progress",
+        error: null,
+        progress: 5,
+        started_at: new Date().toISOString(),
+      })
       .eq("id", clip.id)
       .select("*")
       .single();
@@ -329,6 +335,8 @@ type DbClip = {
   error: string | null;
   resolution: string;
   storage_path: string | null;
+  progress: number;
+  started_at: string | null;
 };
 
 async function syncClip(clip: DbClip): Promise<DbClip> {
@@ -339,8 +347,25 @@ async function syncClip(clip: DbClip): Promise<DbClip> {
   if (!res.ok) return clip; // transient — try again on next poll
   const job = (await res.json()) as {
     status?: string;
+    progress?: number;
     error?: { code?: string; message?: string };
   };
+
+  if (job.status === "in_progress" || job.status === "queued") {
+    const pct = Math.min(95, Math.max(5, Math.round(Number(job.progress) || 0)));
+    if (pct !== clip.progress) {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: updated } = await supabaseAdmin
+        .from("video_clips")
+        .update({ progress: pct })
+        .eq("id", clip.id)
+        .select("*")
+        .single();
+      return (updated as unknown as DbClip | null) ?? clip;
+    }
+    return clip;
+  }
+
 
   if (job.status === "completed") {
     const videoRes = await fetch(`${GATEWAY}/videos/${clip.job_id}/content`, {
@@ -355,7 +380,7 @@ async function syncClip(clip: DbClip): Promise<DbClip> {
         .upload(path, bytes, { contentType: "video/mp4", upsert: true });
       const { data: updated } = await supabaseAdmin
         .from("video_clips")
-        .update({ status: "ready", storage_path: path, error: null })
+        .update({ status: "ready", storage_path: path, error: null, progress: 100 })
         .eq("id", clip.id as string)
         .select("*")
         .single();
@@ -420,6 +445,8 @@ export const getProject = createServerFn({ method: "GET" })
         resolution: clip.resolution as string,
         storage_path: storagePath,
         duration_seconds: clip.duration_seconds as number,
+        progress: (clip.progress as number | null) ?? 0,
+        started_at: (clip.started_at as string | null) ?? null,
         url,
       });
     }
