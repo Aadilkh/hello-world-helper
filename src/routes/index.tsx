@@ -16,6 +16,7 @@ import { generateScript, createClipJob, getProject, listProjects } from "@/lib/v
 import type { ScriptScene, ClipRow } from "@/lib/video.functions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { ResearchChat } from "@/components/ResearchChat";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -47,10 +48,15 @@ type Project = {
   title: string | null;
   hook: string | null;
   scenes: ScriptScene[];
+  platform?: string | null;
+  audience?: string | null;
+  monetization?: { verdict?: string; rpmNote?: string; rules?: string[]; avoid?: string[] } | null;
+  research?: Array<{ title: string; url: string; note: string }> | null;
 };
 
 function Index() {
   const qc = useQueryClient();
+  const [mode, setMode] = useState<"brain" | "quick">("brain");
   const [idea, setIdea] = useState("");
   const [language, setLanguage] = useState<"urdu" | "english">("urdu");
   const [quality, setQuality] = useState<"draft" | "hd">("draft");
