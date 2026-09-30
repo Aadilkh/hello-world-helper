@@ -35,7 +35,7 @@ export function ResearchChat({
 
   async function onFile(file: File | undefined) {
     if (!file) return;
-    if (refs.length >= 3) return toast.error("Zyada se zyada 3 photos");
+    if (refs.length >= 3) { toast.error("Zyada se zyada 3 photos"); return; }
     setUploading(true);
     try {
       const dataUrl = await new Promise<string>((res, rej) => {
@@ -56,7 +56,7 @@ export function ResearchChat({
 
   async function send() {
     const command = text.trim();
-    if (command.length < 3) return toast.error("Apni command likhein");
+    if (command.length < 3) { toast.error("Apni command likhein"); return; }
     setMsgs((m) => [...m, { role: "user", text: command }]);
     setText("");
     setBusy(true);
