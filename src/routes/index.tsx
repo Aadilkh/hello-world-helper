@@ -16,6 +16,7 @@ import { generateScript, createClipJob, getProject, listProjects } from "@/lib/v
 import type { ScriptScene, ClipRow } from "@/lib/video.functions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { ResearchChat } from "@/components/ResearchChat";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -47,10 +48,15 @@ type Project = {
   title: string | null;
   hook: string | null;
   scenes: ScriptScene[];
+  platform?: string | null;
+  audience?: string | null;
+  monetization?: { verdict?: string; rpmNote?: string; rules?: string[]; avoid?: string[] } | null;
+  research?: Array<{ title: string; url: string; note: string }> | null;
 };
 
 function Index() {
   const qc = useQueryClient();
+  const [mode, setMode] = useState<"brain" | "quick">("brain");
   const [idea, setIdea] = useState("");
   const [language, setLanguage] = useState<"urdu" | "english">("urdu");
   const [quality, setQuality] = useState<"draft" | "hd">("draft");
@@ -150,6 +156,29 @@ function Index() {
 
       <main className="mx-auto max-w-md px-4 pb-24 pt-5">
         {!project ? (
+          <div className="mb-4 grid grid-cols-2 gap-1 rounded-full border border-border bg-card p-1 text-sm">
+            <button
+              onClick={() => setMode("brain")}
+              className={`rounded-full py-1.5 ${mode === "brain" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+            >
+              Research Brain
+            </button>
+            <button
+              onClick={() => setMode("quick")}
+              className={`rounded-full py-1.5 ${mode === "quick" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+            >
+              Seedha script
+            </button>
+          </div>
+        ) : null}
+        {!project && mode === "brain" ? (
+          <ResearchChat
+            onPlan={(plan) => {
+              setProjectId(plan.projectId);
+              qc.invalidateQueries({ queryKey: ["projects"] });
+            }}
+          />
+        ) : !project ? (
           <IdeaForm
             idea={idea}
             setIdea={setIdea}
@@ -177,9 +206,54 @@ function Index() {
               <div className="mt-3 flex flex-wrap gap-1.5">
                 <Badge>{project.aspect_ratio}</Badge>
                 <Badge>{project.quality === "hd" ? "HD 720p" : "Draft 360p"}</Badge>
-                <Badge>{project.language === "urdu" ? "اردو narration" : "English narration"}</Badge>
+                <Badge>{project.language} narration</Badge>
+                {project.platform ? <Badge>{project.platform}</Badge> : null}
+                {project.audience ? <Badge>{project.audience}</Badge> : null}
               </div>
             </div>
+
+            {project.monetization?.verdict ? (
+              <div className="rounded-2xl border border-primary/40 bg-card p-4 text-sm">
+                <p className="font-semibold text-primary">Earning plan</p>
+                <p className="mt-1">{project.monetization.verdict}</p>
+                {project.monetization.rpmNote ? (
+                  <p className="mt-1 text-xs text-muted-foreground">{project.monetization.rpmNote}</p>
+                ) : null}
+                {project.monetization.rules?.length ? (
+                  <>
+                    <p className="mt-3 text-xs font-semibold">Platform rules jo follow kiye:</p>
+                    <ul className="ml-4 list-disc text-xs text-muted-foreground">
+                      {project.monetization.rules.map((r, i) => <li key={i}>{r}</li>)}
+                    </ul>
+                  </>
+                ) : null}
+                {project.monetization.avoid?.length ? (
+                  <>
+                    <p className="mt-3 text-xs font-semibold">Ye na karein (earning khatam):</p>
+                    <ul className="ml-4 list-disc text-xs text-muted-foreground">
+                      {project.monetization.avoid.map((r, i) => <li key={i}>{r}</li>)}
+                    </ul>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+
+            {project.research?.length ? (
+              <div className="rounded-2xl border border-border bg-card p-4 text-sm">
+                <p className="font-semibold">Research ke saboot</p>
+                <ul className="mt-2 space-y-2">
+                  {project.research.map((e, i) => (
+                    <li key={i} className="text-xs">
+                      <a href={e.url} target="_blank" rel="noreferrer" className="text-primary underline">
+                        {e.title || e.url}
+                      </a>
+                      <p className="text-muted-foreground">{e.note}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
 
             <Button
               className="w-full gap-2"

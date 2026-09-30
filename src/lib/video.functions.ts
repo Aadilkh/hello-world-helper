@@ -277,12 +277,38 @@ export const createClipJob = createServerFn({ method: "POST" })
         .eq("id", clip.id);
     }
 
+    // Reference photos (from the chat studio) → inline image parts
+    const refPaths = ((project as { ref_image_paths?: string[] | null }).ref_image_paths ?? []).slice(0, 3);
+    const imageParts: Array<{ type: "image"; data: string; mime_type: string }> = [];
+    for (const p of refPaths) {
+      const { data: blob } = await supabaseAdmin.storage.from("generated-videos").download(p);
+      if (!blob) continue;
+      const buf = new Uint8Array(await blob.arrayBuffer());
+      let bin = "";
+      for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+      const mime = p.endsWith(".png") ? "image/png" : p.endsWith(".webp") ? "image/webp" : "image/jpeg";
+      imageParts.push({ type: "image", data: btoa(bin), mime_type: mime });
+    }
+    const input =
+      imageParts.length > 0
+        ? [
+            ...imageParts,
+            {
+              type: "text",
+              text:
+                imageParts.map((_, i) => `<IMAGE_REF_${i}>`).join(" ") +
+                " are reference photos of the subject/look to keep. " +
+                videoPrompt,
+            },
+          ]
+        : videoPrompt;
+
     const res = await fetch(`${GATEWAY}/videos`, {
       method: "POST",
       headers: gatewayHeaders(),
       body: JSON.stringify({
         model: "google/gemini-omni-1.1-flash",
-        input: videoPrompt,
+        input,
         response_format: {
           type: "video",
           resolution,
