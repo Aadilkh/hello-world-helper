@@ -7,9 +7,8 @@
 - [x] DB columns: platform, audience, niche, monetization, research, ref photos, voice note
 - [x] Research brain server code (web research + monetization-first plan) — untested
 
-## Open (is turn)
-- [ ] Video card: real-time progress bar (percent + elapsed) aur download button
-- [ ] Per-scene resolution (360p/720p/1080p) aur length (3-10s) options
+- [x] Video card: real-time progress bar (percent + elapsed) aur download button
+- [x] Per-scene resolution (360p/720p/1080p) aur length (3-10s) options
 
 ## Open (baad mein)
 - [ ] Chat-box studio UI (evidence + monetization plan + attachments)
