@@ -11,8 +11,8 @@
 - [x] Per-scene resolution (360p/720p/1080p) aur length (3-10s) options
 
 ## Open (baad mein)
-- [ ] Chat-box studio UI (evidence + monetization plan + attachments)
-- [ ] Reference photo ko video mein use karna, voice style note
+- [x] Chat-box studio UI (evidence + monetization plan + attachments)
+- [x] Reference photo ko video mein use karna, voice style note (live test pending: backend so raha tha)
 - [ ] Cell 8 — self-upgrade engine: capability registry, gap discovery, research, sandbox mein nayi capability, validation + registration (user ka Python script reference)
 
 ## Notes
