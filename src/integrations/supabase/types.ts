@@ -10,10 +10,82 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
+      capabilities: {
+        Row: {
+          created_at: string
+          description: string
+          domain: string
+          evidence: Json
+          id: string
+          instructions: string
+          is_core: boolean
+          keywords: string[]
+          name: string
+          sha256: string | null
+          status: string
+          validated: boolean
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          domain?: string
+          evidence?: Json
+          id?: string
+          instructions?: string
+          is_core?: boolean
+          keywords?: string[]
+          name: string
+          sha256?: string | null
+          status?: string
+          validated?: boolean
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          domain?: string
+          evidence?: Json
+          id?: string
+          instructions?: string
+          is_core?: boolean
+          keywords?: string[]
+          name?: string
+          sha256?: string | null
+          status?: string
+          validated?: boolean
+        }
+        Relationships: []
+      }
+      upgrade_runs: {
+        Row: {
+          capability_id: string | null
+          created_at: string
+          id: string
+          requirement: string
+          status: string
+          steps: Json
+        }
+        Insert: {
+          capability_id?: string | null
+          created_at?: string
+          id?: string
+          requirement: string
+          status: string
+          steps?: Json
+        }
+        Update: {
+          capability_id?: string | null
+          created_at?: string
+          id?: string
+          requirement?: string
+          status?: string
+          steps?: Json
+        }
+        Relationships: []
+      }
       video_clips: {
         Row: {
           created_at: string
