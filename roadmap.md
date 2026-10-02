@@ -17,3 +17,4 @@
 
 ## Notes
 - User ka VisionPilot Python script (v2.1) abhi adhura hai — poora milne par Cell 8 engine usi ke mutabiq banayenge.
+- [ ] 2-in-1 chat: Vision Pilot (video) + Dev Master (self-upgrade engine) ek hi chat box se — AI khud tay kare kaunsa kaam
