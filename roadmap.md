@@ -12,8 +12,9 @@
 
 ## Open (baad mein)
 - [x] Chat-box studio UI (evidence + monetization plan + attachments)
-- [x] Reference photo ko video mein use karna, voice style note (live test pending: backend so raha tha)
-- [ ] Cell 8 — self-upgrade engine: capability registry, gap discovery, research, sandbox mein nayi capability, validation + registration (user ka Python script reference)
+- [x] Reference photo ko video mein use karna, voice style note
+- [x] Cell 8 — self-upgrade engine: capability registry, gap discovery, research, sandbox mein nayi capability, validation + registration (user ka Python script reference)
 
 ## Notes
 - User ka VisionPilot Python script (v2.1) abhi adhura hai — poora milne par Cell 8 engine usi ke mutabiq banayenge.
+- [x] 2-in-1 chat: Vision Pilot (video) + Dev Master (self-upgrade engine) ek hi chat box se — AI khud tay kare kaunsa kaam
