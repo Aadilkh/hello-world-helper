@@ -8,3 +8,4 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+- Self-upgrade engine (Cell 8) stores learned capabilities as validated prompt rules in the capabilities table, never as executable code — Workers can't safely run generated code.
