@@ -269,6 +269,18 @@ export const researchAndPlan = createServerFn({ method: "POST" })
             .join("\n\n")
         : "(no web results available — rely on your own knowledge and say so)";
 
+    // --- Registered self-upgrade capabilities (Cell 8 engine) ---
+    const { supabaseAdmin: sbCaps } = await import("@/integrations/supabase/client.server");
+    const capRes = await (sbCaps as unknown as { from: (t: string) => { select: (c: string) => { eq: (k: string, v: unknown) => Promise<{ data: Array<{ name: string; instructions: string; keywords: string[] }> | null }> } } })
+      .from("capabilities")
+      .select("name, instructions, keywords, is_core")
+      .eq("status", "ACTIVE");
+    const low = data.command.toLowerCase();
+    const extra = (capRes.data ?? [])
+      .filter((c) => c.instructions && (c.keywords ?? []).some((k) => low.includes(k)))
+      .map((c) => `Capability ${c.name}:\n${c.instructions}`)
+      .join("\n\n");
+
     // --- Step 3: monetization-first plan + script ---
     const plan = await callJson<Plan>({
       model: "openai/gpt-6-astra",
@@ -283,6 +295,7 @@ export const researchAndPlan = createServerFn({ method: "POST" })
           ? `The user attached ${data.refPaths.length} reference photo(s); the first scene should match their look.`
           : "",
         "",
+        extra ? "Extra learned capabilities to apply:\n" + extra : "",
         "Web research findings (use as evidence, cite the URLs you actually used):",
         researchBlock,
         "",

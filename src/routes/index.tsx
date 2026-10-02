@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -146,6 +146,7 @@ function Index() {
             </span>
             <span className="font-display text-lg font-bold tracking-tight">ReelBanao</span>
           </div>
+          <Link to="/engine" className="ml-auto mr-2 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground">Engine</Link>
           {project ? (
             <Button variant="ghost" size="sm" onClick={resetToForm} className="gap-1.5">
               <RotateCcw className="h-3.5 w-3.5" /> Naya video
