@@ -253,3 +253,25 @@ export const toggleCapability = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+// 2-in-1 router: decides whether a chat command is for Vision Pilot (video) or Dev Master (self-upgrade)
+export const classifyCommand = createServerFn({ method: "POST" })
+  .inputValidator((i: unknown) => z.object({ command: z.string().min(1).max(4000) }).parse(i))
+  .handler(async ({ data }) => {
+    return aiJson<{ mode: "video" | "upgrade" | "chat"; reply: string }>(
+      [
+        "Route this user command for a 2-in-1 system (any language).",
+        "mode=video: user wants content/video/script/research for a platform.",
+        "mode=upgrade: user wants the system to learn/add/build a new skill, ability, feature or improve itself (Dev Master).",
+        "mode=chat: greeting or general question; then reply briefly in the user's language explaining it can make videos or upgrade itself. Otherwise reply ''.",
+        `Command: ${data.command}`,
+      ].join("\n"),
+      "route",
+      {
+        type: "object",
+        additionalProperties: false,
+        required: ["mode", "reply"],
+        properties: { mode: { type: "string", enum: ["video", "upgrade", "chat"] }, reply: { type: "string" } },
+      },
+    );
+  });

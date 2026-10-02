@@ -3,6 +3,8 @@ import { toast } from "sonner";
 import { Brain, ImagePlus, Loader2, Mic, Send, X } from "lucide-react";
 import { researchAndPlan, uploadReference } from "@/lib/brain.functions";
 import type { PlanResult } from "@/lib/brain.functions";
+import { classifyCommand, runAutonomousDevelopment } from "@/lib/upgrade.functions";
+import type { Step } from "@/lib/upgrade.functions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -16,7 +18,7 @@ const PLATFORMS = [
 ] as const;
 
 type Platform = (typeof PLATFORMS)[number][0];
-type Msg = { role: "user" | "brain"; text: string; plan?: PlanResult };
+type Msg = { role: "user" | "brain"; text: string; plan?: PlanResult; steps?: Step[] };
 
 export function ResearchChat({
   onPlan,
@@ -61,6 +63,23 @@ export function ResearchChat({
     setText("");
     setBusy(true);
     try {
+      const route = await classifyCommand({ data: { command } });
+      if (route.mode === "chat") {
+        setMsgs((m) => [...m, { role: "brain", text: route.reply }]);
+        return;
+      }
+      if (route.mode === "upgrade") {
+        setMsgs((m) => [...m, { role: "brain", text: "Dev Master: kami dhoond kar nayi salahiyat bana raha hoon…" }]);
+        const r = await runAutonomousDevelopment({ data: { requirement: command } });
+        const text =
+          r.status === "AUTONOMOUS_DEVELOPMENT_PASS"
+            ? `Nayi salahiyat "${r.capability?.name}" ban kar registry mein shamil ho gayi. Ab video plans mein khud istemal hogi.`
+            : r.status === "ALREADY_CAPABLE"
+              ? "Ye salahiyat pehle se maujood hai."
+              : "Nayi salahiyat jaanch mein pass nahi hui.";
+        setMsgs((m) => [...m, { role: "brain", text, steps: r.steps }]);
+        return;
+      }
       const plan = await researchAndPlan({
         data: { command, platform, refPaths: refs.map((r) => r.path), voiceNote, quality: "draft" },
       });
@@ -84,8 +103,8 @@ export function ResearchChat({
           <Brain className="h-4 w-4" />
         </span>
         <div>
-          <p className="text-sm font-semibold">Vision Pilot Research Brain</p>
-          <p className="text-xs text-muted-foreground">Kisi bhi zubaan mein command dein</p>
+          <p className="text-sm font-semibold">Vision Pilot + Dev Master</p>
+          <p className="text-xs text-muted-foreground">Video banwayein ya system ko nayi salahiyat sikhayein</p>
         </div>
       </div>
 
@@ -93,7 +112,7 @@ export function ResearchChat({
         {msgs.length === 0 ? (
           <p className="rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground">
             Misal: "USA audience ke liye New York travel vlog, realistic western style" ya "Japanese
-            audience ke liye Python course ka pehla lesson"
+            audience ke liye Python course ka pehla lesson" ya "khud ko Japanese course videos banana sikhao"
           </p>
         ) : null}
         {msgs.map((m, i) =>
@@ -104,6 +123,16 @@ export function ResearchChat({
           ) : (
             <div key={i} className="max-w-[95%] space-y-2 text-sm">
               <p className="whitespace-pre-wrap">{m.text}</p>
+              {m.steps ? (
+                <ul className="space-y-1 rounded-xl bg-muted/40 p-2 text-xs">
+                  {m.steps.map((st, j) => (
+                    <li key={j}>
+                      {st.status === "PASS" ? "✓" : st.status === "FAIL" ? "✗" : "–"} <b>{st.step}:</b>{" "}
+                      <span className="text-muted-foreground">{st.detail}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
               {m.plan ? (
                 <p className="text-xs text-muted-foreground">
                   {m.plan.platform} · {m.plan.audience} · {m.plan.niche} — neeche plan aur scenes dekhein
