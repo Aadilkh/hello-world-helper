@@ -15,7 +15,7 @@ export async function captureVideoFrames(source: File | string, sceneAt: number)
   video.playsInline = true;
   if (typeof source === "string") video.crossOrigin = "anonymous";
   const objectUrl = source instanceof File ? URL.createObjectURL(source) : null;
-  const src = objectUrl ?? source;
+  const src = typeof source === "string" ? source : objectUrl;
   const waitFor = (event: string) => new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => { cleanup(); reject(new Error("Video load nahi hui. MP4 file share karein ya direct public video link dein.")); }, 20000);
     const ok = () => { cleanup(); resolve(); };
@@ -25,6 +25,7 @@ export async function captureVideoFrames(source: File | string, sceneAt: number)
     video.addEventListener("error", fail, { once: true });
   });
   try {
+    if (!src) throw new Error("Video file nahi khul saki.");
     video.src = src;
     video.load();
     if (video.readyState < 1) await waitFor("loadedmetadata");
