@@ -1,8 +1,8 @@
 export type VideoFrame = { at: number; dataUrl: string };
 
 export function parseSceneTime(command: string): number | null {
-  const words = command.match(/\b(\d{1,3})\s*(?:min(?:ute)?s?\.?|منٹ)\s*(\d{1,2})\s*(?:sec(?:ond)?s?\.?|سیکنڈ)?\b/i);
-  if (words) return Number(words[1]) * 60 + Number(words[2]);
+  const words = command.match(/\b(\d{1,3})\s*(?:min(?:ute)?s?\.?|منٹ)\s*(\d{1,2})\s*(?:sec(?:ond)?s?\.?|سیکنڈ)?(?=\b|\s|$)/i);
+  if (words && Number(words[2]) < 60) return Number(words[1]) * 60 + Number(words[2]);
   const clock = command.match(/\b(\d{1,3}):(\d{2})\b/);
   if (clock && Number(clock[2]) < 60) return Number(clock[1]) * 60 + Number(clock[2]);
   return null;
@@ -19,7 +19,7 @@ export async function captureVideoFrames(source: File | string, sceneAt: number)
   const waitFor = (event: string) => new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => { cleanup(); reject(new Error("Video load nahi hui. MP4 file share karein ya direct public video link dein.")); }, 20000);
     const ok = () => { cleanup(); resolve(); };
-    const fail = () => { cleanup(); reject(new Error("Video link par frames dekhne ki ijazat nahi mili. Video file upload karein.")); };
+    const fail = () => { cleanup(); reject(new Error(typeof source === "string" ? "Is link ke frames nahi khul sake. Direct public MP4 link dein ya file upload karein." : "Ye video browser mein nahi chal saki. Doosri MP4 file azmaein.")); };
     const cleanup = () => { clearTimeout(timer); video.removeEventListener(event, ok); video.removeEventListener("error", fail); };
     video.addEventListener(event, ok, { once: true });
     video.addEventListener("error", fail, { once: true });
