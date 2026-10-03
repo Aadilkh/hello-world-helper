@@ -209,7 +209,7 @@ export function ResearchChat({
       {videoFile || videoLink || referenceNote ? (
         <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
           <Video className="h-4 w-4 shrink-0" />
-          <span className="min-w-0 flex-1 truncate">{videoFile?.name ?? videoLink || "Scene ka khulasa aglay video mein istemal hoga"}</span>
+          <span className="min-w-0 flex-1 truncate">{videoFile?.name || videoLink || "Scene ka khulasa aglay video mein istemal hoga"}</span>
           <Button size="icon" variant="ghost" aria-label="Video reference hatao" title="Video reference hatao" onClick={() => { setVideoFile(null); setVideoLink(""); setReferenceNote(""); }}><X className="h-4 w-4" /></Button>
         </div>
       ) : null}

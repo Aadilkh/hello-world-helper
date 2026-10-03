@@ -20,4 +20,4 @@
 - [x] 2-in-1 chat: Vision Pilot (video) + Dev Master (self-upgrade engine) ek hi chat box se — AI khud tay kare kaunsa kaam
 
 ## Current
-- [ ] Chat se shared video ya direct video link ka timestamp-specific scene, movement aur expressions samajh kar naya original content plan banana.
+- [x] Chat se shared video ya direct video link ka timestamp-specific scene, movement aur expressions samajh kar naya original content plan banana (browser-readable videos only).
