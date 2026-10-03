@@ -1,7 +1,9 @@
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { Brain, ImagePlus, Loader2, Mic, Send, X } from "lucide-react";
+import { Brain, ImagePlus, Loader2, Mic, Send, X, Video, Link as LinkIcon } from "lucide-react";
 import { researchAndPlan, uploadReference } from "@/lib/brain.functions";
+import { analyzeVideoScene } from "@/lib/video-reference.functions";
+import { captureVideoFrames, parseSceneTime } from "@/lib/video-reference";
 import type { PlanResult } from "@/lib/brain.functions";
 import { classifyCommand, runAutonomousDevelopment } from "@/lib/upgrade.functions";
 import type { Step } from "@/lib/upgrade.functions";
@@ -33,7 +35,12 @@ export function ResearchChat({
   const [refs, setRefs] = useState<Array<{ path: string; preview: string }>>([]);
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoLink, setVideoLink] = useState("");
+  const [showLink, setShowLink] = useState(false);
+  const [referenceNote, setReferenceNote] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLInputElement>(null);
 
   async function onFile(file: File | undefined) {
     if (!file) return;
@@ -59,10 +66,30 @@ export function ResearchChat({
   async function send() {
     const command = text.trim();
     if (command.length < 3) { toast.error("Apni command likhein"); return; }
+    const source = videoFile ?? videoLink.trim();
+    if (source && typeof source === "string" && !/^https:\/\/[^\s]+$/i.test(source)) {
+      toast.error("Mukammal HTTPS video link dein"); return;
+    }
     setMsgs((m) => [...m, { role: "user", text: command }]);
     setText("");
     setBusy(true);
     try {
+      if (source) {
+        const sceneAt = parseSceneTime(command);
+        if (sceneAt === null) {
+          setMsgs((m) => [...m, { role: "brain", text: "Scene ka waqt likhein, misal 2:22 ya 2 min 22 sec." }]);
+          setText(command);
+          return;
+        }
+        const { frames } = await captureVideoFrames(source, sceneAt);
+        const analysis = await analyzeVideoScene({ data: { command, sceneAt, frames } });
+        const note = `Reference at ${sceneAt}s: ${analysis.movement}; expression: ${analysis.expression}. Original adaptation: ${analysis.adaptation}. Do not copy the original person or footage.`;
+        setReferenceNote(note);
+        setMsgs((m) => [...m, { role: "brain", text: `${analysis.summary}\n\nMovement: ${analysis.movement}\nExpressions: ${analysis.expression}\nNaye content ke liye: ${analysis.adaptation}\n\n${analysis.limitations}` }]);
+        setVideoFile(null);
+        setVideoLink("");
+        return;
+      }
       const route = await classifyCommand({ data: { command } });
       if (route.mode === "chat") {
         setMsgs((m) => [...m, { role: "brain", text: route.reply }]);
@@ -81,12 +108,14 @@ export function ResearchChat({
         return;
       }
       const plan = await researchAndPlan({
-        data: { command, platform, refPaths: refs.map((r) => r.path), voiceNote, quality: "draft" },
+        data: { command: referenceNote ? `${command}\n\n${referenceNote}` : command, platform, refPaths: refs.map((r) => r.path), voiceNote, quality: "draft" },
       });
       setMsgs((m) => [...m, { role: "brain", text: plan.reply, plan }]);
       setRefs([]);
+      setReferenceNote("");
       onPlan(plan);
     } catch (e) {
+      setText(command);
       setMsgs((m) => [
         ...m,
         { role: "brain", text: e instanceof Error ? e.message : "Research nahi ho saki" },
@@ -177,6 +206,18 @@ export function ResearchChat({
         </div>
       ) : null}
 
+      {videoFile || videoLink || referenceNote ? (
+        <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+          <Video className="h-4 w-4 shrink-0" />
+          <span className="min-w-0 flex-1 truncate">{videoFile?.name || videoLink || "Scene ka khulasa aglay video mein istemal hoga"}</span>
+          <Button size="icon" variant="ghost" aria-label="Video reference hatao" title="Video reference hatao" onClick={() => { setVideoFile(null); setVideoLink(""); setReferenceNote(""); }}><X className="h-4 w-4" /></Button>
+        </div>
+      ) : null}
+
+      {showLink ? (
+        <input type="url" value={videoLink} onChange={(e) => { setVideoLink(e.target.value); setVideoFile(null); }} placeholder="Direct public MP4 video link (https://…)" aria-label="Video link" className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-xs" />
+      ) : null}
+
       {showVoice ? (
         <input
           value={voiceNote}
@@ -199,6 +240,9 @@ export function ResearchChat({
             <Button type="button" size="icon" variant="ghost" aria-label="Photo lagao" disabled={uploading} onClick={() => fileRef.current?.click()}>
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
             </Button>
+            <input ref={videoRef} type="file" accept="video/mp4,video/webm,video/quicktime" hidden onChange={(e) => { const file = e.target.files?.[0]; if (file) { if (file.size > 100 * 1024 * 1024) toast.error("Video 100MB se chhoti honi chahiye"); else { setVideoFile(file); setVideoLink(""); setShowLink(false); } } e.target.value = ""; }} />
+            <Button type="button" size="icon" variant="ghost" aria-label="Video lagao" title="Video lagao" onClick={() => videoRef.current?.click()}><Video className="h-4 w-4" /></Button>
+            <Button type="button" size="icon" variant={showLink ? "secondary" : "ghost"} aria-label="Video link lagao" title="Direct video link lagao" onClick={() => setShowLink((v) => !v)}><LinkIcon className="h-4 w-4" /></Button>
             <Button type="button" size="icon" variant={showVoice ? "secondary" : "ghost"} aria-label="Awaaz ka style" onClick={() => setShowVoice((s) => !s)}>
               <Mic className="h-4 w-4" />
             </Button>
