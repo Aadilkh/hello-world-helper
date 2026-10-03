@@ -49,8 +49,8 @@ export async function captureVideoFrames(source: File | string, sceneAt: number)
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       try {
         frames.push({ at, dataUrl: canvas.toDataURL("image/jpeg", 0.7) });
-      } catch {
-        throw new Error("Is link ki video ko site ne dekhne se roka hai. Video file upload karein.");
+      } catch (error) {
+        throw new Error(`Video frame parh nahi saka: ${error instanceof Error ? error.message : "video link ki ijazat nahi mili"}`);
       }
     }
     return { frames, duration };
