@@ -258,12 +258,13 @@ export const toggleCapability = createServerFn({ method: "POST" })
 export const classifyCommand = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => z.object({ command: z.string().min(1).max(4000) }).parse(i))
   .handler(async ({ data }) => {
-    return aiJson<{ mode: "video" | "upgrade" | "chat"; reply: string }>(
+    return aiJson<{ mode: "video" | "upgrade" | "build" | "chat"; reply: string }>(
       [
-        "Route this user command for a 2-in-1 system (any language).",
+        "Route this user command for a multi-purpose system (any language).",
         "mode=video: user wants content/video/script/research for a platform.",
-        "mode=upgrade: user wants the system to learn/add/build a new skill, ability, feature or improve itself (Dev Master).",
-        "mode=chat: greeting or general question; then reply briefly in the user's language explaining it can make videos or upgrade itself. Otherwise reply ''.",
+        "mode=build: user wants a game, app, website, tool, calculator, page or AI/chatbot-like app built or changed.",
+        "mode=upgrade: user wants the system itself to learn/add a new skill or improve itself (Dev Master).",
+        "mode=chat: greeting or general question; then reply briefly in the user's language explaining it can make videos, build games/apps/websites, or upgrade itself. Otherwise reply ''.",
         `Command: ${data.command}`,
       ].join("\n"),
       "route",
@@ -271,7 +272,33 @@ export const classifyCommand = createServerFn({ method: "POST" })
         type: "object",
         additionalProperties: false,
         required: ["mode", "reply"],
-        properties: { mode: { type: "string", enum: ["video", "upgrade", "chat"] }, reply: { type: "string" } },
+        properties: { mode: { type: "string", enum: ["video", "upgrade", "build", "chat"] }, reply: { type: "string" } },
+      },
+    );
+  });
+
+export type BuildResult = { title: string; summary: string; html: string };
+
+export const buildProject = createServerFn({ method: "POST" })
+  .inputValidator((i: unknown) =>
+    z.object({ command: z.string().min(3).max(4000), previousHtml: z.string().max(200000).optional() }).parse(i),
+  )
+  .handler(async ({ data }) => {
+    return aiJson<BuildResult>(
+      [
+        "You are Dev Master, an expert developer. Build exactly what the user asks as ONE self-contained HTML file.",
+        "Rules: inline all CSS and JS, no external scripts/CDNs/network calls, mobile-first touch-friendly, polished dark design, works inside a sandboxed iframe (no localStorage dependency required, wrap it in try/catch).",
+        "Games: use canvas or DOM with touch controls plus keyboard. Apps/websites: fully interactive. 'AI' apps: build a working rule-based/offline assistant and explain that in summary.",
+        "summary: 2-4 short sentences in the user's language (Roman Urdu if they wrote Roman Urdu) on what was built and how to use it.",
+        data.previousHtml ? `Modify this existing project per the command, return the full updated file:\n${data.previousHtml}` : "",
+        `Command: ${data.command}`,
+      ].join("\n"),
+      "build",
+      {
+        type: "object",
+        additionalProperties: false,
+        required: ["title", "summary", "html"],
+        properties: { title: { type: "string" }, summary: { type: "string" }, html: { type: "string" } },
       },
     );
   });
