@@ -21,3 +21,4 @@
 
 ## Current
 - [x] Chat se shared video ya direct video link ka timestamp-specific scene, movement aur expressions samajh kar naya original content plan banana (browser-readable videos only).
+- [ ] Current capabilities aur limitations ka verified status user ko batana.
