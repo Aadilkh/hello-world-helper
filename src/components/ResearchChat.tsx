@@ -5,8 +5,9 @@ import { researchAndPlan, uploadReference } from "@/lib/brain.functions";
 import { analyzeVideoScene } from "@/lib/video-reference.functions";
 import { captureVideoFrames, parseSceneTime } from "@/lib/video-reference";
 import type { PlanResult } from "@/lib/brain.functions";
-import { classifyCommand, runAutonomousDevelopment } from "@/lib/upgrade.functions";
-import type { Step } from "@/lib/upgrade.functions";
+import { buildProject, classifyCommand, runAutonomousDevelopment } from "@/lib/upgrade.functions";
+import type { BuildResult, Step } from "@/lib/upgrade.functions";
+import { BuildPreview } from "@/components/BuildPreview";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -20,7 +21,7 @@ const PLATFORMS = [
 ] as const;
 
 type Platform = (typeof PLATFORMS)[number][0];
-type Msg = { role: "user" | "brain"; text: string; plan?: PlanResult; steps?: Step[] };
+type Msg = { role: "user" | "brain"; text: string; plan?: PlanResult; steps?: Step[]; build?: BuildResult };
 
 export function ResearchChat({
   onPlan,
@@ -39,6 +40,7 @@ export function ResearchChat({
   const [videoLink, setVideoLink] = useState("");
   const [showLink, setShowLink] = useState(false);
   const [referenceNote, setReferenceNote] = useState("");
+  const [lastBuild, setLastBuild] = useState<BuildResult | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLInputElement>(null);
 
@@ -95,6 +97,13 @@ export function ResearchChat({
         setMsgs((m) => [...m, { role: "brain", text: route.reply }]);
         return;
       }
+      if (route.mode === "build") {
+        setMsgs((m) => [...m, { role: "brain", text: "Dev Master: aap ka project bana raha hoon…" }]);
+        const b = await buildProject({ data: { command, previousHtml: lastBuild?.html } });
+        setLastBuild(b);
+        setMsgs((m) => [...m, { role: "brain", text: b.summary, build: b }]);
+        return;
+      }
       if (route.mode === "upgrade") {
         setMsgs((m) => [...m, { role: "brain", text: "Dev Master: kami dhoond kar nayi salahiyat bana raha hoon…" }]);
         const r = await runAutonomousDevelopment({ data: { requirement: command } });
@@ -133,7 +142,7 @@ export function ResearchChat({
         </span>
         <div>
           <p className="text-sm font-semibold">Vision Pilot + Dev Master</p>
-          <p className="text-xs text-muted-foreground">Video banwayein ya system ko nayi salahiyat sikhayein</p>
+          <p className="text-xs text-muted-foreground">Video, game, app, website — sab yahin se banwayein</p>
         </div>
       </div>
 
@@ -141,7 +150,7 @@ export function ResearchChat({
         {msgs.length === 0 ? (
           <p className="rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground">
             Misal: "USA audience ke liye New York travel vlog, realistic western style" ya "Japanese
-            audience ke liye Python course ka pehla lesson" ya "khud ko Japanese course videos banana sikhao"
+            audience ke liye Python course ka pehla lesson" ya "ek snake game banao" ya "meri dukaan ki website banao"
           </p>
         ) : null}
         {msgs.map((m, i) =>
@@ -162,6 +171,7 @@ export function ResearchChat({
                   ))}
                 </ul>
               ) : null}
+              {m.build ? <BuildPreview build={m.build} /> : null}
               {m.plan ? (
                 <p className="text-xs text-muted-foreground">
                   {m.plan.platform} · {m.plan.audience} · {m.plan.niche} — neeche plan aur scenes dekhein
@@ -172,7 +182,7 @@ export function ResearchChat({
         )}
         {busy ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Web par research ho rahi hai, earning plan ban raha hai… (1-2 minute)
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Kaam ho raha hai… (1-2 minute)
           </div>
         ) : null}
       </div>

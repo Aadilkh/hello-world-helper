@@ -22,3 +22,5 @@
 ## Current
 - [x] Chat se uploaded video ka timestamp-specific scene, movement aur expressions samajhna — synthetic video se live verified; direct public links aur aglay content-plan mein reuse abhi unverified.
 - [x] Current capabilities aur limitations ka verified status user ko batana.
+
+- [x] Same chat box se game/app/website/AI app banana (Dev Master build mode, live preview + download)
