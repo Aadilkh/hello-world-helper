@@ -99,9 +99,29 @@ export function ResearchChat({
       }
       if (route.mode === "build") {
         setMsgs((m) => [...m, { role: "brain", text: "Dev Master: aap ka project bana raha hoon…" }]);
-        const b = await buildProject({ data: { command, previousHtml: lastBuild?.html } });
-        setLastBuild(b);
-        setMsgs((m) => [...m, { role: "brain", text: b.summary, build: b }]);
+        try {
+          const b = await buildProject({ data: { command, previousHtml: lastBuild?.html } });
+          setLastBuild(b);
+          setMsgs((m) => [...m, { role: "brain", text: b.summary, build: b }]);
+        } catch (buildErr) {
+          // Self-learning loop: sense the gap, learn it, retry once
+          setMsgs((m) => [
+            ...m,
+            { role: "brain", text: `Build mein dushwari hui (${buildErr instanceof Error ? buildErr.message : "nakami"}). Dev Master is kami ko research kar ke seekh raha hai…` },
+          ]);
+          const r = await runAutonomousDevelopment({ data: { requirement: command } });
+          if (r.status === "AUTONOMOUS_DEVELOPMENT_PASS") {
+            setMsgs((m) => [
+              ...m,
+              { role: "brain", text: `Nayi salahiyat "${r.capability?.name}" seekh li. Ab dobara bana raha hoon…`, steps: r.steps },
+            ]);
+            const b = await buildProject({ data: { command, previousHtml: lastBuild?.html } });
+            setLastBuild(b);
+            setMsgs((m) => [...m, { role: "brain", text: b.summary, build: b }]);
+          } else {
+            throw buildErr;
+          }
+        }
         return;
       }
       if (route.mode === "upgrade") {
