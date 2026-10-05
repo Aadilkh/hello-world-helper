@@ -24,3 +24,4 @@
 - [x] Current capabilities aur limitations ka verified status user ko batana.
 
 - [x] Same chat box se game/app/website/AI app banana (Dev Master build mode, live preview + download)
+- [x] Self-learning loop: video ya build nakam ho to Dev Master khud gap mehsoos kar ke seekhe aur dobara koshish kare; seekhi salahiyatein build prompt mein bhi shamil

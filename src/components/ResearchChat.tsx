@@ -99,9 +99,29 @@ export function ResearchChat({
       }
       if (route.mode === "build") {
         setMsgs((m) => [...m, { role: "brain", text: "Dev Master: aap ka project bana raha hoon…" }]);
-        const b = await buildProject({ data: { command, previousHtml: lastBuild?.html } });
-        setLastBuild(b);
-        setMsgs((m) => [...m, { role: "brain", text: b.summary, build: b }]);
+        try {
+          const b = await buildProject({ data: { command, previousHtml: lastBuild?.html } });
+          setLastBuild(b);
+          setMsgs((m) => [...m, { role: "brain", text: b.summary, build: b }]);
+        } catch (buildErr) {
+          // Self-learning loop: sense the gap, learn it, retry once
+          setMsgs((m) => [
+            ...m,
+            { role: "brain", text: `Build mein dushwari hui (${buildErr instanceof Error ? buildErr.message : "nakami"}). Dev Master is kami ko research kar ke seekh raha hai…` },
+          ]);
+          const r = await runAutonomousDevelopment({ data: { requirement: command } });
+          if (r.status === "AUTONOMOUS_DEVELOPMENT_PASS") {
+            setMsgs((m) => [
+              ...m,
+              { role: "brain", text: `Nayi salahiyat "${r.capability?.name}" seekh li. Ab dobara bana raha hoon…`, steps: r.steps },
+            ]);
+            const b = await buildProject({ data: { command, previousHtml: lastBuild?.html } });
+            setLastBuild(b);
+            setMsgs((m) => [...m, { role: "brain", text: b.summary, build: b }]);
+          } else {
+            throw buildErr;
+          }
+        }
         return;
       }
       if (route.mode === "upgrade") {
@@ -116,13 +136,44 @@ export function ResearchChat({
         setMsgs((m) => [...m, { role: "brain", text, steps: r.steps }]);
         return;
       }
-      const plan = await researchAndPlan({
-        data: { command: referenceNote ? `${command}\n\n${referenceNote}` : command, platform, refPaths: refs.map((r) => r.path), voiceNote, quality: "draft" },
-      });
-      setMsgs((m) => [...m, { role: "brain", text: plan.reply, plan }]);
-      setRefs([]);
-      setReferenceNote("");
-      onPlan(plan);
+      const fullCommand = referenceNote ? `${command}\n\n${referenceNote}` : command;
+      try {
+        const plan = await researchAndPlan({
+          data: { command: fullCommand, platform, refPaths: refs.map((r) => r.path), voiceNote, quality: "draft" },
+        });
+        setMsgs((m) => [...m, { role: "brain", text: plan.reply, plan }]);
+        setRefs([]);
+        setReferenceNote("");
+        onPlan(plan);
+      } catch (planErr) {
+        // Self-learning loop: sense the gap, learn it, retry once
+        setMsgs((m) => [
+          ...m,
+          { role: "brain", text: `Is kaam mein mujhe dushwari hui (${planErr instanceof Error ? planErr.message : "nakami"}). Dev Master ab is kami ko research kar ke seekh raha hai…` },
+        ]);
+        const r = await runAutonomousDevelopment({ data: { requirement: command } });
+        if (r.status === "AUTONOMOUS_DEVELOPMENT_PASS") {
+          setMsgs((m) => [
+            ...m,
+            { role: "brain", text: `Nayi salahiyat "${r.capability?.name}" seekh li. Ab aapki command nayi salahiyat ke saath dobara chala raha hoon…`, steps: r.steps },
+          ]);
+          const plan = await researchAndPlan({
+            data: { command: fullCommand, platform, refPaths: refs.map((r2) => r2.path), voiceNote, quality: "draft" },
+          });
+          setMsgs((m) => [...m, { role: "brain", text: plan.reply, plan }]);
+          setRefs([]);
+          setReferenceNote("");
+          onPlan(plan);
+        } else if (r.status === "ALREADY_CAPABLE") {
+          throw planErr;
+        } else {
+          setMsgs((m) => [
+            ...m,
+            { role: "brain", text: "Is kami ko seekhna abhi mumkin nahi hua (jaanch pass nahi hui). Command thori wazeh kar ke dobara bhejein.", steps: r.steps },
+          ]);
+          setText(command);
+        }
+      }
     } catch (e) {
       setText(command);
       setMsgs((m) => [

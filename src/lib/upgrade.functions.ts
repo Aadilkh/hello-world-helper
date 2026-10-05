@@ -284,9 +284,18 @@ export const buildProject = createServerFn({ method: "POST" })
     z.object({ command: z.string().min(3).max(4000), previousHtml: z.string().max(200000).optional() }).parse(i),
   )
   .handler(async ({ data }) => {
+    // Apply learned capabilities (Cell 8 registry) relevant to this command
+    const sb = await db();
+    const { data: caps } = await sb.from("capabilities").select("name, instructions, keywords").eq("status", "ACTIVE");
+    const low = data.command.toLowerCase();
+    const learned = ((caps ?? []) as Array<{ name: string; instructions: string; keywords: string[] }>)
+      .filter((c) => c.instructions && (c.keywords ?? []).some((k) => low.includes(k)))
+      .map((c) => `Capability ${c.name}:\n${c.instructions}`)
+      .join("\n\n");
     return aiJson<BuildResult>(
       [
         "You are Dev Master, an expert developer. Build exactly what the user asks as ONE self-contained HTML file.",
+        learned ? "Apply these learned capabilities where relevant:\n" + learned : "",
         "Rules: inline all CSS and JS, no external scripts/CDNs/network calls, mobile-first touch-friendly, polished dark design, works inside a sandboxed iframe (no localStorage dependency required, wrap it in try/catch).",
         "Games: use canvas or DOM with touch controls plus keyboard. Apps/websites: fully interactive. 'AI' apps: build a working rule-based/offline assistant and explain that in summary.",
         "summary: 2-4 short sentences in the user's language (Roman Urdu if they wrote Roman Urdu) on what was built and how to use it.",
