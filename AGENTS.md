@@ -10,3 +10,4 @@
 <!-- LOVABLE:END -->
 - Self-upgrade engine (Cell 8) stores learned capabilities as validated prompt rules in the capabilities table, never as executable code — Workers can't safely run generated code.
 - Analyze user-provided videos by sampling timestamped frames in the browser before server-side vision analysis, because the Worker cannot run native video decoders and third-party embeds often block frame access.
+- Keep the connected-services catalog separate from provider authentication; catalog entries and website visits never imply authorized runtime access, preventing false connection status.
