@@ -20,7 +20,8 @@
 - [x] 2-in-1 chat: Vision Pilot (video) + Dev Master (self-upgrade engine) ek hi chat box se — AI khud tay kare kaunsa kaam
 
 ## Current
-- [ ] Tasveer ke mutabiq 20 apps ka connected-services hissa: asli connection status, app details aur supported account connections; unsupported services ke liye wazeh limitations.
+- [x] Tasveer ke mutabiq 20 apps ki list, categories, search aur details; sab connections setup-pending, website kholne se connected status nahi badalta.
+- [ ] Asli provider account connections — aglay marhalay mein user ka service chunna aur uski ijazat/setup darkar.
 - [x] Chat se uploaded video ka timestamp-specific scene, movement aur expressions samajhna — synthetic video se live verified; direct public links aur aglay content-plan mein reuse abhi unverified.
 - [x] Current capabilities aur limitations ka verified status user ko batana.
 

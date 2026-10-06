@@ -17,6 +17,7 @@ import type { ScriptScene, ClipRow } from "@/lib/video.functions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ResearchChat } from "@/components/ResearchChat";
+import { ConnectedApps } from "@/components/ConnectedApps";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -299,6 +300,7 @@ function Index() {
             window.scrollTo({ top: 0 });
           }}
         />
+        <ConnectedApps />
       </main>
     </div>
   );
