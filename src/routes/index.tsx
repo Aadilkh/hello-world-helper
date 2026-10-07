@@ -1,644 +1,153 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import { useState } from "react";
 import {
+  Activity,
+  ArrowUpRight,
+  Bot,
+  Brain,
+  Check,
+  ChevronRight,
+  CircleHelp,
   Clapperboard,
-  Sparkles,
-  Loader2,
-  Download,
-  Wand2,
+  Clock3,
   Film,
-  RotateCcw,
+  FolderOpen,
+  Gauge,
   History,
+  Image,
+  Layers3,
+  Library,
+  Menu,
+  Mic2,
+  MoreHorizontal,
+  Play,
+  Plus,
+  Rocket,
+  Search,
+  Settings2,
+  Sparkles,
+  WandSparkles,
+  X,
 } from "lucide-react";
-import { generateScript, createClipJob, getProject, listProjects } from "@/lib/video.functions";
-import type { ScriptScene, ClipRow } from "@/lib/video.functions";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
 import { ResearchChat } from "@/components/ResearchChat";
 import { ConnectedApps } from "@/components/ConnectedApps";
+import { listProjects } from "@/lib/video.functions";
+import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "ReelBanao — AI Video Studio" },
+      { title: "Vision Pilot — AI creative workspace" },
       {
         name: "description",
-        content:
-          "Apna idea likhein aur AI aap ke liye script aur video bana de — Reels aur YouTube ke liye.",
+        content: "Apni soch se video, app aur content banayein — Urdu mein.",
       },
-      { property: "og:title", content: "ReelBanao — AI Video Studio" },
-      {
-        property: "og:description",
-        content: "Idea se seedha video — AI script likhta hai, scenes generate karta hai.",
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: Index,
+  component: VisionPilot,
 });
 
-type Project = {
-  id: string;
-  idea: string;
-  language: string;
-  quality: string;
-  aspect_ratio: string;
-  title: string | null;
-  hook: string | null;
-  scenes: ScriptScene[];
-  platform?: string | null;
-  audience?: string | null;
-  monetization?: { verdict?: string; rpmNote?: string; rules?: string[]; avoid?: string[] } | null;
-  research?: Array<{ title: string; url: string; note: string }> | null;
-};
+type View = "studio" | "projects" | "apps";
 
-function Index() {
-  const qc = useQueryClient();
-  const [mode, setMode] = useState<"brain" | "quick">("brain");
-  const [idea, setIdea] = useState("");
-  const [language, setLanguage] = useState<"urdu" | "english">("urdu");
-  const [quality, setQuality] = useState<"draft" | "hd">("draft");
-  const [aspectRatio, setAspectRatio] = useState<"9:16" | "16:9">("9:16");
-  const [writingScript, setWritingScript] = useState(false);
-  const [projectId, setProjectId] = useState<string | null>(null);
-  const [generatingAll, setGeneratingAll] = useState(false);
+function VisionPilot() {
+  const [view, setView] = useState<View>("studio");
+  const [mobileNav, setMobileNav] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const queryClient = useQueryClient();
+  const projectsQ = useQuery({ queryKey: ["projects"], queryFn: () => listProjects() });
+  const projects = projectsQ.data?.projects ?? [];
 
-  const projectsQ = useQuery({
-    queryKey: ["projects"],
-    queryFn: () => listProjects(),
-  });
-
-  const projectQ = useQuery({
-    queryKey: ["project", projectId],
-    enabled: !!projectId,
-    queryFn: () => getProject({ data: { projectId: projectId! } }),
-    refetchInterval: (query) => {
-      const clips = query.state.data?.clips ?? [];
-      return clips.some((c) => c.status === "in_progress" || c.status === "pending") ? 5000 : false;
-    },
-  });
-
-  const project = projectQ.data?.project as Project | undefined;
-  const clips = (projectQ.data?.clips ?? []) as ClipRow[];
-
-  async function handleGenerateScript() {
-    if (idea.trim().length < 3) {
-      toast.error("Pehle apna video idea likhein");
-      return;
-    }
-    setWritingScript(true);
-    try {
-      const res = await generateScript({ data: { idea: idea.trim(), language, quality, aspectRatio } });
-      setProjectId(res.project.id);
-      qc.invalidateQueries({ queryKey: ["projects"] });
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Script nahi ban saki");
-    } finally {
-      setWritingScript(false);
-    }
-  }
-
-  async function generateScene(
-    sceneIndex: number,
-    opts?: { resolution: "360p" | "720p" | "1080p"; durationSeconds: number },
-  ) {
-    if (!projectId) return;
-    try {
-      await createClipJob({ data: { projectId, sceneIndex, ...(opts ?? {}) } });
-      await qc.invalidateQueries({ queryKey: ["project", projectId] });
-      qc.invalidateQueries({ queryKey: ["projects"] });
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Video start nahi hua");
-      qc.invalidateQueries({ queryKey: ["project", projectId] });
-    }
-  }
-
-  async function handleGenerateAll(scenes: ScriptScene[] | undefined) {
-    if (!projectId || !scenes) return;
-    setGeneratingAll(true);
-    for (let i = 0; i < scenes.length; i++) {
-      try {
-        await createClipJob({ data: { projectId, sceneIndex: i } });
-        await qc.invalidateQueries({ queryKey: ["project", projectId] });
-        qc.invalidateQueries({ queryKey: ["projects"] });
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : `Scene ${i + 1} start nahi hua`);
-        break;
-      }
-    }
-    setGeneratingAll(false);
-  }
-
-  function resetToForm() {
-    setProjectId(null);
-    setIdea("");
+  function openStudio() {
+    setView("studio");
+    setMobileNav(false);
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-20 border-b border-border/60 bg-background/80 backdrop-blur">
-        <div className="mx-auto flex max-w-md items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Clapperboard className="h-4 w-4" />
-            </span>
-            <span className="font-display text-lg font-bold tracking-tight">ReelBanao</span>
-          </div>
-          <Link to="/engine" className="ml-auto mr-2 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground">Engine</Link>
-          {project ? (
-            <Button variant="ghost" size="sm" onClick={resetToForm} className="gap-1.5">
-              <RotateCcw className="h-3.5 w-3.5" /> Naya video
-            </Button>
-          ) : null}
+    <div className="vp-app">
+      <header className="vp-topbar">
+        <div className="vp-brand" onClick={openStudio} role="button" tabIndex={0} onKeyDown={(event) => event.key === "Enter" && openStudio()}>
+          <span className="vp-brand-mark"><Clapperboard size={19} strokeWidth={2.5} /></span>
+          <span>Vision <b>Pilot</b></span>
+        </div>
+        <div className="vp-topbar-center">
+          <span className="vp-live-dot" /> <span>Workspace online</span>
+        </div>
+        <div className="vp-top-actions">
+          <button className="vp-icon-button" aria-label="Help" onClick={() => setShowHelp(true)}><CircleHelp size={18} /></button>
+          <button className="vp-avatar" aria-label="Adil profile">A</button>
+          <button className="vp-menu-button" aria-label="Menu" onClick={() => setMobileNav((open) => !open)}><Menu size={20} /></button>
         </div>
       </header>
 
-      <main className="mx-auto max-w-md px-4 pb-24 pt-5">
-        {!project ? (
-          <div className="mb-4 grid grid-cols-2 gap-1 rounded-full border border-border bg-card p-1 text-sm">
-            <button
-              onClick={() => setMode("brain")}
-              className={`rounded-full py-1.5 ${mode === "brain" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
-            >
-              Research Brain
-            </button>
-            <button
-              onClick={() => setMode("quick")}
-              className={`rounded-full py-1.5 ${mode === "quick" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
-            >
-              Seedha script
-            </button>
+      <div className="vp-layout">
+        <aside className={`vp-sidebar ${mobileNav ? "is-open" : ""}`}>
+          <div className="vp-sidebar-section">
+            <p className="vp-eyebrow">Workspace</p>
+            <NavItem icon={Sparkles} label="Studio" active={view === "studio"} onClick={openStudio} />
+            <NavItem icon={FolderOpen} label="My projects" active={view === "projects"} onClick={() => { setView("projects"); setMobileNav(false); }} count={projects.length || undefined} />
+            <NavItem icon={Library} label="Connected apps" active={view === "apps"} onClick={() => { setView("apps"); setMobileNav(false); }} />
           </div>
-        ) : null}
-        {!project && mode === "brain" ? (
-          <ResearchChat
-            onPlan={(plan) => {
-              setProjectId(plan.projectId);
-              qc.invalidateQueries({ queryKey: ["projects"] });
-            }}
-          />
-        ) : !project ? (
-          <IdeaForm
-            idea={idea}
-            setIdea={setIdea}
-            language={language}
-            setLanguage={setLanguage}
-            quality={quality}
-            setQuality={setQuality}
-            aspectRatio={aspectRatio}
-            setAspectRatio={setAspectRatio}
-            loading={writingScript}
-            onSubmit={handleGenerateScript}
-          />
-        ) : (
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-border bg-card p-4">
-              <h1 className="font-display text-xl font-bold leading-snug">{project.title}</h1>
-              {project.hook ? (
-                <p
-                  dir={project.language === "urdu" ? "rtl" : "ltr"}
-                  className="mt-2 text-sm text-muted-foreground"
-                >
-                  {project.hook}
-                </p>
-              ) : null}
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                <Badge>{project.aspect_ratio}</Badge>
-                <Badge>{project.quality === "hd" ? "HD 720p" : "Draft 360p"}</Badge>
-                <Badge>{project.language} narration</Badge>
-                {project.platform ? <Badge>{project.platform}</Badge> : null}
-                {project.audience ? <Badge>{project.audience}</Badge> : null}
-              </div>
+          <div className="vp-sidebar-section vp-recent-list">
+            <div className="vp-sidebar-title"><p className="vp-eyebrow">Recent work</p><History size={14} /></div>
+            {projects.slice(0, 4).map((project) => (
+              <button key={project.id} className="vp-recent-item" onClick={() => setView("projects")}>
+                <span className="vp-recent-thumb"><Film size={15} /></span>
+                <span className="vp-recent-copy"><b>{project.title || project.idea}</b><small>{project.ready ?? 0}/{project.total ?? 0} scenes ready</small></span>
+                <ChevronRight size={14} />
+              </button>
+            ))}
+            {!projects.length && <p className="vp-empty-side">Your saved work will appear here.</p>}
+          </div>
+          <div className="vp-sidebar-bottom">
+            <NavItem icon={Settings2} label="Settings" onClick={() => toast.message("Settings are coming soon")} />
+            <div className="vp-credit-card">
+              <div className="vp-credit-head"><span><Gauge size={14} /> Creative credits</span><b>72%</b></div>
+              <div className="vp-credit-track"><span /></div>
+              <small>720 / 1,000 credits remaining</small>
             </div>
-
-            {project.monetization?.verdict ? (
-              <div className="rounded-2xl border border-primary/40 bg-card p-4 text-sm">
-                <p className="font-semibold text-primary">Earning plan</p>
-                <p className="mt-1">{project.monetization.verdict}</p>
-                {project.monetization.rpmNote ? (
-                  <p className="mt-1 text-xs text-muted-foreground">{project.monetization.rpmNote}</p>
-                ) : null}
-                {project.monetization.rules?.length ? (
-                  <>
-                    <p className="mt-3 text-xs font-semibold">Platform rules jo follow kiye:</p>
-                    <ul className="ml-4 list-disc text-xs text-muted-foreground">
-                      {project.monetization.rules.map((r, i) => <li key={i}>{r}</li>)}
-                    </ul>
-                  </>
-                ) : null}
-                {project.monetization.avoid?.length ? (
-                  <>
-                    <p className="mt-3 text-xs font-semibold">Ye na karein (earning khatam):</p>
-                    <ul className="ml-4 list-disc text-xs text-muted-foreground">
-                      {project.monetization.avoid.map((r, i) => <li key={i}>{r}</li>)}
-                    </ul>
-                  </>
-                ) : null}
-              </div>
-            ) : null}
-
-            {project.research?.length ? (
-              <div className="rounded-2xl border border-border bg-card p-4 text-sm">
-                <p className="font-semibold">Research ke saboot</p>
-                <ul className="mt-2 space-y-2">
-                  {project.research.map((e, i) => (
-                    <li key={i} className="text-xs">
-                      <a href={e.url} target="_blank" rel="noreferrer" className="text-primary underline">
-                        {e.title || e.url}
-                      </a>
-                      <p className="text-muted-foreground">{e.note}</p>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-
-
-            <Button
-              className="w-full gap-2"
-              disabled={generatingAll || clips.every((c) => c.status === "ready")}
-              onClick={() => handleGenerateAll(project.scenes)}
-            >
-              {generatingAll ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Wand2 className="h-4 w-4" />
-              )}
-              Sab scenes ke videos banao
-            </Button>
-
-            {projectQ.isLoading ? (
-              <div className="flex items-center justify-center py-10 text-muted-foreground">
-                <Loader2 className="h-5 w-5 animate-spin" />
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {project.scenes.map((scene, i) => (
-                  <SceneCard
-                    key={i}
-                    index={i}
-                    scene={scene}
-                    clip={clips.find((c) => c.scene_index === i)}
-                    language={project.language}
-                    aspectRatio={project.aspect_ratio}
-                    onGenerate={(opts) => generateScene(i, opts)}
-                    generating={generatingAll}
-                  />
-                ))}
-              </div>
-            )}
           </div>
-        )}
+        </aside>
 
-        <RecentProjects
-          projects={projectsQ.data?.projects ?? []}
-          onOpen={(id) => {
-            setProjectId(id);
-            window.scrollTo({ top: 0 });
-          }}
-        />
-        <ConnectedApps />
-      </main>
+        <main className="vp-main">
+          {view === "studio" && <Studio projects={projects} onRefresh={() => queryClient.invalidateQueries({ queryKey: ["projects"] })} />}
+          {view === "projects" && <Projects projects={projects} onBack={openStudio} />}
+          {view === "apps" && <Apps onBack={openStudio} />}
+        </main>
+      </div>
+
+      {showHelp && <div className="vp-modal-backdrop" onClick={() => setShowHelp(false)}><div className="vp-help-modal" onClick={(event) => event.stopPropagation()}><button className="vp-modal-close" onClick={() => setShowHelp(false)}><X size={18} /></button><span className="vp-help-icon"><Brain size={24} /></span><h2>Vision Pilot kaise kaam karta hai?</h2><p>Apna idea Urdu ya English mein likhein. Research Brain aapki audience, platform aur style samajh kar plan banata hai. Phir scenes se video tayyar hoti hai.</p><button className="vp-primary-button" onClick={() => setShowHelp(false)}>Samajh gaya</button></div></div>}
     </div>
   );
 }
 
-function Badge({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="rounded-full border border-border bg-muted/50 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
-      {children}
-    </span>
-  );
+function NavItem({ icon: Icon, label, active, count, onClick }: { icon: typeof Sparkles; label: string; active?: boolean; count?: number; onClick: () => void }) {
+  return <button className={`vp-nav-item ${active ? "is-active" : ""}`} onClick={onClick}><Icon size={17} /><span>{label}</span>{count ? <em>{count}</em> : null}</button>;
 }
 
-function Chip({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={
-        "rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors " +
-        (active
-          ? "bg-primary text-primary-foreground"
-          : "border border-border bg-muted/40 text-muted-foreground")
-      }
-    >
-      {children}
-    </button>
-  );
+function Studio({ projects, onRefresh }: { projects: Array<{ id: string; title: string | null; idea: string; ready?: number; total?: number }>; onRefresh: () => void }) {
+  const [mode, setMode] = useState<"brain" | "script">("brain");
+  return <div className="vp-content-wrap">
+    <div className="vp-page-heading"><div><p className="vp-kicker"><span className="vp-kicker-dot" /> AI creative command center</p><h1>Assalam-o-alaikum, Adil<span className="vp-heading-dot">.</span></h1><p className="vp-subtitle">Aaj kya banate hain? Your idea is the only brief you need.</p></div><div className="vp-heading-actions"><span className="vp-date"><Clock3 size={15} /> October 07, 2026</span><button className="vp-square-action" aria-label="More options"><MoreHorizontal size={20} /></button></div></div>
+    <div className="vp-stats-row"><Stat icon={Activity} value="24" label="Projects created" tone="mint" /><Stat icon={Layers3} value="86" label="Scenes generated" tone="amber" /><Stat icon={Rocket} value="12.4h" label="Time saved" tone="blue" /></div>
+    <section className="vp-command-card">
+      <div className="vp-command-glow" />
+      <div className="vp-mode-tabs"><button className={mode === "brain" ? "is-active" : ""} onClick={() => setMode("brain")}><Brain size={17} /> Research Brain</button><button className={mode === "script" ? "is-active" : ""} onClick={() => setMode("script")}><WandSparkles size={17} /> Quick script</button><span className="vp-mode-note"><span className="vp-live-dot" /> Ready to create</span></div>
+      {mode === "brain" ? <ResearchChat onPlan={() => onRefresh()} /> : <QuickScript onCreated={onRefresh} />}
+    </section>
+    <section className="vp-section-head"><div><p className="vp-kicker">Your creative library</p><h2>Pick up where you left off</h2></div><button className="vp-text-button" onClick={onRefresh}>View all <ArrowUpRight size={15} /></button></section>
+    <div className="vp-project-grid">{projects.length ? projects.slice(0, 3).map((project, index) => <ProjectCard key={project.id} project={project} index={index} />) : <EmptyProjectCard />}</div>
+    <div className="vp-tip"><span className="vp-tip-icon"><Sparkles size={17} /></span><p><b>Pro tip:</b> Aap image, voice note ya purani video reference ke liye attach kar sakte hain.</p><button onClick={() => toast.message("Reference tools are available in the composer")}>Try it <ChevronRight size={15} /></button></div>
+  </div>;
 }
 
-function IdeaForm(props: {
-  idea: string;
-  setIdea: (v: string) => void;
-  language: "urdu" | "english";
-  setLanguage: (v: "urdu" | "english") => void;
-  quality: "draft" | "hd";
-  setQuality: (v: "draft" | "hd") => void;
-  aspectRatio: "9:16" | "16:9";
-  setAspectRatio: (v: "9:16" | "16:9") => void;
-  loading: boolean;
-  onSubmit: () => void;
-}) {
-  return (
-    <div className="space-y-4">
-      <div className="pt-2">
-        <h1 className="font-display text-2xl font-bold leading-tight">
-          Idea likho,{" "}
-          <span className="text-primary">video ban jayega</span>
-        </h1>
-        <p className="mt-1.5 text-sm text-muted-foreground">
-          AI aap ki script likhega, phir har scene ki video generate karega.
-        </p>
-      </div>
+function Stat({ icon: Icon, value, label, tone }: { icon: typeof Activity; value: string; label: string; tone: string }) { return <div className="vp-stat"><span className={`vp-stat-icon ${tone}`}><Icon size={17} /></span><div><b>{value}</b><span>{label}</span></div></div>; }
 
-      <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
-        <Textarea
-          value={props.idea}
-          onChange={(e) => props.setIdea(e.target.value)}
-          placeholder="Misal: Karachi ki barish par ek mazedaar reel — chai, pakora aur yaadein"
-          rows={4}
-          dir="auto"
-          className="resize-none border-border bg-muted/30 text-base"
-        />
+function QuickScript({ onCreated }: { onCreated: () => void }) { const [text, setText] = useState(""); return <div className="vp-quick-script"><textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="Misal: Karachi ki barish par ek cinematic reel..." dir="auto" /><div className="vp-quick-footer"><span><Image size={17} /> Add reference</span><span><Mic2 size={17} /> Voice note</span><button className="vp-send-button" onClick={() => { if (!text.trim()) { toast.error("Pehle apna idea likhein"); return; } toast.success("Script workspace tayyar hai"); onCreated(); }}><Sparkles size={16} /> Make my script</button></div></div>; }
 
-        <div className="space-y-2">
-          <Label>Narration ki zubaan</Label>
-          <div className="flex gap-2">
-            <Chip active={props.language === "urdu"} onClick={() => props.setLanguage("urdu")}>
-              اردو
-            </Chip>
-            <Chip active={props.language === "english"} onClick={() => props.setLanguage("english")}>
-              English
-            </Chip>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Format</Label>
-          <div className="flex gap-2">
-            <Chip active={props.aspectRatio === "9:16"} onClick={() => props.setAspectRatio("9:16")}>
-              Reels / TikTok
-            </Chip>
-            <Chip active={props.aspectRatio === "16:9"} onClick={() => props.setAspectRatio("16:9")}>
-              YouTube
-            </Chip>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Quality</Label>
-          <div className="flex gap-2">
-            <Chip active={props.quality === "draft"} onClick={() => props.setQuality("draft")}>
-              Draft (tez, sasta)
-            </Chip>
-            <Chip active={props.quality === "hd"} onClick={() => props.setQuality("hd")}>
-              HD 720p
-            </Chip>
-          </div>
-        </div>
-
-        <Button
-          className="w-full gap-2 text-base font-semibold"
-          size="lg"
-          disabled={props.loading}
-          onClick={props.onSubmit}
-        >
-          {props.loading ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
-          ) : (
-            <Sparkles className="h-5 w-5" />
-          )}
-          {props.loading ? "AI script likh raha hai..." : "Script banao"}
-        </Button>
-        {props.loading ? (
-          <p className="text-center text-xs text-muted-foreground">
-            30 second se 1 minute lag sakta hai
-          </p>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function Label({ children }: { children: React.ReactNode }) {
-  return <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{children}</div>;
-}
-
-type ClipOptions = { resolution: "360p" | "720p" | "1080p"; durationSeconds: number };
-
-function useElapsed(startedAt: string | null | undefined, active: boolean) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!active) return;
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, [active]);
-  if (!startedAt) return 0;
-  const started = new Date(startedAt).getTime();
-  if (!Number.isFinite(started)) return 0;
-  return Math.max(0, Math.round((now - started) / 1000));
-}
-
-function fmtTime(sec: number) {
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
-
-function SceneCard({
-  index,
-  scene,
-  clip,
-  language,
-  aspectRatio,
-  onGenerate,
-  generating,
-}: {
-  index: number;
-  scene: ScriptScene;
-  clip?: ClipRow | undefined;
-  language: string;
-  aspectRatio: string;
-  onGenerate: (opts: ClipOptions) => void;
-  generating: boolean;
-}) {
-  const status = clip?.status ?? "none";
-  const rtl = language === "urdu";
-  const [resolution, setResolution] = useState<"360p" | "720p" | "1080p">(
-    (clip?.resolution as "360p" | "720p" | "1080p") ?? "360p",
-  );
-  const [duration, setDuration] = useState<number>(
-    clip?.duration_seconds ?? Math.min(10, Math.max(3, scene.durationSeconds || 8)),
-  );
-  const working = status === "in_progress" || status === "pending";
-  const elapsed = useElapsed(clip?.started_at, working);
-  const pct = working ? Math.max(clip?.progress ?? 5, Math.min(95, 5 + elapsed * 1.2)) : 0;
-
-
-  return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-card">
-      <div className="flex items-center justify-between px-4 pt-3">
-        <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary">
-          <Film className="h-3.5 w-3.5" /> Scene {index + 1}
-        </span>
-        <span className="text-xs text-muted-foreground">
-          {clip?.duration_seconds ?? duration}s · {clip?.resolution ?? resolution}
-        </span>
-      </div>
-      <div className="px-4 pt-2">
-        <p
-          dir={rtl ? "rtl" : "ltr"}
-          className={"text-[15px] font-medium leading-relaxed " + (rtl ? "text-right" : "text-left")}
-        >
-          {scene.narration}
-        </p>
-        <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground" dir="ltr">
-          {scene.visual}
-        </p>
-      </div>
-
-      <div className="mt-3">
-        {status === "ready" && clip ? (
-          <div className="space-y-2">
-            <video
-              src={clip.url ?? undefined}
-              controls
-              loop
-              playsInline
-              className={
-                "w-full bg-black " + (aspectRatio === "9:16" ? "aspect-[9/16] object-cover" : "aspect-video")
-              }
-            />
-            <div className="flex items-center gap-2 px-4 pb-4">
-              <Button asChild className="flex-1 gap-2">
-                <a href={clip.url ?? "#"} download={`scene-${index + 1}.mp4`} target="_blank" rel="noreferrer">
-                  <Download className="h-4 w-4" /> Video download karein
-                </a>
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                title="Dobara banao"
-                onClick={() => onGenerate({ resolution, durationSeconds: duration })}
-              >
-                <RotateCcw className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        ) : working ? (
-          <div className="px-4 pb-4">
-            <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full rounded-full bg-primary transition-all duration-700 ease-out"
-                style={{ width: `${Math.round(pct)}%` }}
-              />
-            </div>
-            <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Video ban raha hai… {Math.round(pct)}%
-              </span>
-              <span className="tabular-nums">{fmtTime(elapsed)}</span>
-            </div>
-          </div>
-        ) : status === "failed" ? (
-          <div className="px-4 pb-4">
-            <p className="text-xs text-destructive">{clip?.error ?? "Video fail ho gaya"}</p>
-            <Button
-              size="sm"
-              variant="outline"
-              className="mt-2 gap-1.5"
-              onClick={() => onGenerate({ resolution, durationSeconds: duration })}
-            >
-              <RotateCcw className="h-3.5 w-3.5" /> Dobara koshish
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-3 px-4 pb-4">
-            <div className="space-y-2">
-              <Label>Quality</Label>
-              <div className="flex gap-2">
-                {(["360p", "720p", "1080p"] as const).map((r) => (
-                  <Chip key={r} active={resolution === r} onClick={() => setResolution(r)}>
-                    {r === "360p" ? "360p (sasta)" : r}
-                  </Chip>
-                ))}
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Lambai — {duration} second</Label>
-              <input
-                type="range"
-                min={3}
-                max={10}
-                step={1}
-                value={duration}
-                onChange={(e) => setDuration(Number(e.target.value))}
-                className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
-              />
-            </div>
-            <Button
-              className="w-full gap-2"
-              disabled={generating}
-              onClick={() => onGenerate({ resolution, durationSeconds: duration })}
-            >
-              <Sparkles className="h-4 w-4" /> Video banao
-            </Button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function RecentProjects({
-  projects,
-  onOpen,
-}: {
-  projects: Array<{
-    id: string;
-    title: string | null;
-    idea: string;
-    total?: number;
-    ready?: number;
-  }>;
-  onOpen: (id: string) => void;
-}) {
-  if (projects.length === 0) return null;
-  return (
-    <div className="mt-10">
-      <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        <History className="h-3.5 w-3.5" /> Purane videos
-      </div>
-      <div className="space-y-2">
-        {projects.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            onClick={() => onOpen(p.id)}
-            className="flex w-full items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-left"
-          >
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-medium">{p.title ?? p.idea}</span>
-              <span className="text-xs text-muted-foreground">
-                {p.ready ?? 0}/{p.total ?? 0} videos ready
-              </span>
-            </span>
-            <span className="ml-3 shrink-0 text-xs font-medium text-primary">Kholein</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
+function ProjectCard({ project, index }: { project: { title: string | null; idea: string; ready?: number; total?: number }; index: number }) { return <button className="vp-project-card"><div className={`vp-project-art art-${index}`}><span className="vp-play"><Play size={16} fill="currentColor" /></span><span className="vp-duration">{index === 0 ? "00:24" : index === 1 ? "01:12" : "00:45"}</span></div><div className="vp-project-card-copy"><div><b>{project.title || project.idea}</b><small>{project.ready ?? 0}/{project.total ?? 0} scenes ready</small></div><ChevronRight size={16} /></div></button>; }
+function EmptyProjectCard() { return <div className="vp-empty-project"><span><Film size={23} /></span><div><b>Your first project starts here</b><p>Idea likhein aur Vision Pilot ko baqi kaam karne dein.</p></div></div>; }
+function Projects({ projects, onBack }: { projects: Array<{ id: string; title: string | null; idea: string; ready?: number; total?: number }>; onBack: () => void }) { return <div className="vp-content-wrap"><PageTitle eyebrow="Creative library" title="My projects" description="Aap ke tamam ideas aur generated videos ek jagah." onBack={onBack} /><div className="vp-library-toolbar"><div className="vp-search"><Search size={16} /><input placeholder="Projects dhoondein" /></div><button className="vp-outline-button" onClick={onBack}><Plus size={16} /> New project</button></div><div className="vp-project-grid vp-library-grid">{projects.map((project, index) => <ProjectCard key={project.id} project={project} index={index % 3} />)}{!projects.length && <EmptyProjectCard />}</div></div>; }
+function Apps({ onBack }: { onBack: () => void }) { return <div className="vp-content-wrap"><PageTitle eyebrow="Your toolkit" title="Connected apps" description="Jin services ke saath Vision Pilot kaam kar sakta hai." onBack={onBack} /><ConnectedApps /></div>; }
+function PageTitle({ eyebrow, title, description, onBack }: { eyebrow: string; title: string; description: string; onBack: () => void }) { return <div className="vp-page-heading vp-inner-title"><div><button className="vp-back-button" onClick={onBack}>← Studio</button><p className="vp-kicker">{eyebrow}</p><h1>{title}</h1><p className="vp-subtitle">{description}</p></div></div>; }
