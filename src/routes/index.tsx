@@ -5,8 +5,10 @@ import {
   Activity,
   ArrowUpRight,
   Bot,
+  BookOpen,
   Brain,
   Check,
+  Code2,
   ChevronRight,
   CircleHelp,
   Clapperboard,
@@ -27,6 +29,7 @@ import {
   Search,
   Settings2,
   Sparkles,
+  TestTube2,
   WandSparkles,
   X,
 } from "lucide-react";
@@ -49,7 +52,7 @@ export const Route = createFileRoute("/")({
   component: VisionPilot,
 });
 
-type View = "studio" | "projects" | "apps";
+type View = "studio" | "projects" | "memories" | "development" | "apps";
 
 function VisionPilot() {
   const [view, setView] = useState<View>("studio");
@@ -87,6 +90,8 @@ function VisionPilot() {
             <p className="vp-eyebrow">Workspace</p>
             <NavItem icon={Sparkles} label="Studio" active={view === "studio"} onClick={openStudio} />
             <NavItem icon={FolderOpen} label="My projects" active={view === "projects"} onClick={() => { setView("projects"); setMobileNav(false); }} count={projects.length || undefined} />
+            <NavItem icon={BookOpen} label="Memories" active={view === "memories"} onClick={() => { setView("memories"); setMobileNav(false); }} count={projects.length || undefined} />
+            <NavItem icon={Code2} label="Development" active={view === "development"} onClick={() => { setView("development"); setMobileNav(false); }} />
             <NavItem icon={Library} label="Connected apps" active={view === "apps"} onClick={() => { setView("apps"); setMobileNav(false); }} />
           </div>
           <div className="vp-sidebar-section vp-recent-list">
@@ -113,6 +118,8 @@ function VisionPilot() {
         <main className="vp-main">
           {view === "studio" && <Studio projects={projects} onRefresh={() => queryClient.invalidateQueries({ queryKey: ["projects"] })} />}
           {view === "projects" && <Projects projects={projects} onBack={openStudio} />}
+          {view === "memories" && <Memories projects={projects} onBack={openStudio} />}
+          {view === "development" && <Development onBack={openStudio} />}
           {view === "apps" && <Apps onBack={openStudio} />}
         </main>
       </div>
@@ -149,5 +156,31 @@ function QuickScript({ onCreated }: { onCreated: () => void }) { const [text, se
 function ProjectCard({ project, index }: { project: { title: string | null; idea: string; ready?: number; total?: number }; index: number }) { return <button className="vp-project-card"><div className={`vp-project-art art-${index}`}><span className="vp-play"><Play size={16} fill="currentColor" /></span><span className="vp-duration">{index === 0 ? "00:24" : index === 1 ? "01:12" : "00:45"}</span></div><div className="vp-project-card-copy"><div><b>{project.title || project.idea}</b><small>{project.ready ?? 0}/{project.total ?? 0} scenes ready</small></div><ChevronRight size={16} /></div></button>; }
 function EmptyProjectCard() { return <div className="vp-empty-project"><span><Film size={23} /></span><div><b>Your first project starts here</b><p>Idea likhein aur Vision Pilot ko baqi kaam karne dein.</p></div></div>; }
 function Projects({ projects, onBack }: { projects: Array<{ id: string; title: string | null; idea: string; ready?: number; total?: number }>; onBack: () => void }) { return <div className="vp-content-wrap"><PageTitle eyebrow="Creative library" title="My projects" description="Aap ke tamam ideas aur generated videos ek jagah." onBack={onBack} /><div className="vp-library-toolbar"><div className="vp-search"><Search size={16} /><input placeholder="Projects dhoondein" /></div><button className="vp-outline-button" onClick={onBack}><Plus size={16} /> New project</button></div><div className="vp-project-grid vp-library-grid">{projects.map((project, index) => <ProjectCard key={project.id} project={project} index={index % 3} />)}{!projects.length && <EmptyProjectCard />}</div></div>; }
+function Memories({ projects, onBack }: { projects: Array<{ id: string; title: string | null; idea: string; ready?: number; total?: number }>; onBack: () => void }) {
+  const [filter, setFilter] = useState("Sab");
+  const filters = ["Sab", "Ideas", "Scripts", "Projects"];
+  const memories = projects.map((project) => ({
+    ...project,
+    type: project.total ? "Projects" : "Ideas",
+  })).filter((memory) => filter === "Sab" || memory.type === filter);
+
+  return <div className="vp-content-wrap">
+    <PageTitle eyebrow="Stored creativity" title="Memories" description="Aapki ideas, scripts aur project parts — dobara istemal ke liye mehfooz." onBack={onBack} />
+    <div className="vp-memory-hero"><div className="vp-memory-hero-icon"><Brain size={24} /></div><div><b>Vision Pilot ko yaad rehta hai</b><p>Ideas ko save karein, storyline ke parts alag rakhein, aur simple command se unhein naye project mein jor dein.</p></div><button className="vp-primary-button" onClick={onBack}><Sparkles size={15} /> New idea</button></div>
+    <div className="vp-memory-toolbar"><div className="vp-memory-filters">{filters.map((item) => <button key={item} className={filter === item ? "is-active" : ""} onClick={() => setFilter(item)}>{item}</button>)}</div><span>{memories.length} saved {memories.length === 1 ? "memory" : "memories"}</span></div>
+    <div className="vp-memory-list">{memories.map((memory, index) => <article className="vp-memory-row" key={memory.id}><span className={`vp-memory-row-icon memory-${index % 3}`}><BookOpen size={17} /></span><div className="vp-memory-copy"><div><b>{memory.title || memory.idea}</b><span>{memory.type}</span></div><p>{memory.idea}</p><small>{memory.ready ?? 0}/{memory.total ?? 0} project parts ready</small></div><button className="vp-memory-use" onClick={() => { toast.success("Memory composer mein add ho gayi"); onBack(); }}>Use <ArrowUpRight size={14} /></button></article>)}{!memories.length && <div className="vp-empty-project"><span><BookOpen size={23} /></span><div><b>Abhi koi memory save nahi</b><p>Studio mein idea likhein — Vision Pilot usay yahan yaad rakhega.</p></div></div>}</div>
+    <div className="vp-memory-note"><Check size={16} /><p><b>Memories = Your stored creativity.</b> Har saved idea future film, game ya app ka starting point ban sakta hai.</p></div>
+  </div>;
+}
+
+function Development({ onBack }: { onBack: () => void }) {
+  const checks = ["Idea ko research aur plan mein badalna", "React website, AI app ya game ka live preview", "Testing aur security checks", "Downloadable project output"];
+  return <div className="vp-content-wrap">
+    <PageTitle eyebrow="Build · Create · Launch" title="Development workspace" description="Idea se tested project tak — Vision Pilot aur Dev Master saath kaam karte hain." onBack={onBack} />
+    <section className="vp-development-card"><div className="vp-development-heading"><span className="vp-development-icon"><Code2 size={24} /></span><div><p className="vp-kicker">Development option</p><h2>Apna project banayein</h2><p>Chat Box mein seedha command dein. Vision Pilot research karega, Dev Master build karega, aur live preview yahin dikhayega.</p></div></div><div className="vp-development-grid"><div className="vp-development-checks">{checks.map((item) => <div key={item}><span><Check size={14} /></span><p>{item}</p></div>)}</div><div className="vp-development-launch"><span className="vp-live-dot" /><b>Build system ready</b><p>Website, game ya AI app ke liye workspace kholen.</p><button className="vp-primary-button" onClick={onBack}>Start building <ArrowUpRight size={15} /></button></div></div></section>
+    <div className="vp-development-tools"><article><span><TestTube2 size={18} /></span><div><b>Testing included</b><p>Build ke baad preview aur checks ke saath result dekhein.</p></div></article><article><span><Bot size={18} /></span><div><b>Dev Master learns</b><p>Kami aaye to validated capability seekh kar dobara try karta hai.</p></div></article><article><span><FolderOpen size={18} /></span><div><b>Ready to export</b><p>Apna completed project download karke aage le jayein.</p></div></article></div>
+  </div>;
+}
+
 function Apps({ onBack }: { onBack: () => void }) { return <div className="vp-content-wrap"><PageTitle eyebrow="Your toolkit" title="Connected apps" description="Jin services ke saath Vision Pilot kaam kar sakta hai." onBack={onBack} /><ConnectedApps /></div>; }
 function PageTitle({ eyebrow, title, description, onBack }: { eyebrow: string; title: string; description: string; onBack: () => void }) { return <div className="vp-page-heading vp-inner-title"><div><button className="vp-back-button" onClick={onBack}>← Studio</button><p className="vp-kicker">{eyebrow}</p><h1>{title}</h1><p className="vp-subtitle">{description}</p></div></div>; }
