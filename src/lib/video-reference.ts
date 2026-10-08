@@ -61,6 +61,65 @@ export async function captureVideoFrames(source: File | string, sceneAt: number)
   }
 }
 
+export function isTutorialRequest(command: string): boolean {
+  const keywords = ["tutorial", "course", "lesson", "lecture", "summarize", "summary", "samjho", "samajh", "sikhao", "sikhai", "kursus", "dars", "khulasa", "pura video", "full video", "poori video", "kya sikhata", "kya parhata", "topics", "chapters"];
+  const lower = command.toLowerCase();
+  return keywords.some((kw) => lower.includes(kw));
+}
+
+export async function captureFullVideoFrames(source: File | string, maxFrames = 8): Promise<{ frames: VideoFrame[]; duration: number }> {
+  const video = document.createElement("video");
+  video.muted = true;
+  video.preload = "auto";
+  video.playsInline = true;
+  if (typeof source === "string") video.crossOrigin = "anonymous";
+  const objectUrl = source instanceof File ? URL.createObjectURL(source) : null;
+  const src = typeof source === "string" ? source : objectUrl;
+  const waitFor = (event: string) => new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => { cleanup(); reject(new Error("Video load nahi hui.")); }, 30000);
+    const ok = () => { cleanup(); resolve(); };
+    const fail = () => { cleanup(); reject(new Error("Video frames nahi khul sake.")); };
+    const cleanup = () => { clearTimeout(timer); video.removeEventListener(event, ok); video.removeEventListener("error", fail); };
+    video.addEventListener(event, ok, { once: true });
+    video.addEventListener("error", fail, { once: true });
+  });
+  try {
+    if (!src) throw new Error("Video file nahi khul saki.");
+    video.src = src;
+    video.load();
+    if (video.readyState < 1) await waitFor("loadedmetadata");
+    const duration = video.duration;
+    if (!Number.isFinite(duration) || duration <= 0) throw new Error("Video ki lambai nahi parh saki.");
+    const count = Math.min(maxFrames, Math.max(4, Math.floor(duration / 15)));
+    const interval = duration / (count + 1);
+    const times = Array.from({ length: count }, (_, i) => Math.min(duration - 0.5, interval * (i + 1)));
+    const canvas = document.createElement("canvas");
+    const scale = Math.min(1, 640 / Math.max(video.videoWidth, video.videoHeight));
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+    if (!canvas.width || !canvas.height) throw new Error("Video frames nahi parh sake.");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Video frames nahi parh sake.");
+    const frames: VideoFrame[] = [];
+    for (const at of times) {
+      const seeking = waitFor("seeked");
+      video.currentTime = at;
+      await seeking;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      try {
+        frames.push({ at, dataUrl: canvas.toDataURL("image/jpeg", 0.6) });
+      } catch {
+        // skip frame on error
+      }
+    }
+    return { frames, duration };
+  } finally {
+    video.removeAttribute("src");
+    video.load();
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  }
+}
+
 export async function captureVideoAudio(source: File | string, sceneAt: number): Promise<{ audioDataUrl: string | null }> {
   if (typeof source === "string") {
     return { audioDataUrl: null };

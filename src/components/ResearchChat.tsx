@@ -2,8 +2,9 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Brain, ImagePlus, Loader2, Mic, Send, X, Video, Link as LinkIcon } from "lucide-react";
 import { researchAndPlan, uploadReference } from "@/lib/brain.functions";
-import { analyzeVideoScene } from "@/lib/video-reference.functions";
-import { captureVideoFrames, captureVideoAudio, parseSceneTime } from "@/lib/video-reference";
+import { analyzeVideoScene, analyzeTutorialVideo } from "@/lib/video-reference.functions";
+import type { TutorialAnalysis } from "@/lib/video-reference.functions";
+import { captureVideoFrames, captureVideoAudio, captureFullVideoFrames, parseSceneTime, isTutorialRequest } from "@/lib/video-reference";
 import type { PlanResult } from "@/lib/brain.functions";
 import { buildProject, classifyCommand, runAutonomousDevelopment } from "@/lib/upgrade.functions";
 import type { BuildResult, Step } from "@/lib/upgrade.functions";
@@ -21,7 +22,7 @@ const PLATFORMS = [
 ] as const;
 
 type Platform = (typeof PLATFORMS)[number][0];
-type Msg = { role: "user" | "brain"; text: string; plan?: PlanResult; steps?: Step[]; build?: BuildResult };
+type Msg = { role: "user" | "brain"; text: string; plan?: PlanResult; steps?: Step[]; build?: BuildResult; tutorial?: TutorialAnalysis };
 
 export function ResearchChat({
   onPlan,
@@ -78,20 +79,34 @@ export function ResearchChat({
     try {
       if (source) {
         const sceneAt = parseSceneTime(command);
-        if (sceneAt === null) {
-          setMsgs((m) => [...m, { role: "brain", text: "Scene ka waqt likhein, misal 2:22 ya 2 min 22 sec." }]);
+        const tutorialMode = sceneAt === null && isTutorialRequest(command);
+        if (sceneAt === null && !tutorialMode) {
+          setMsgs((m) => [...m, { role: "brain", text: "Scene ka waqt likhein (misal 2:22) ya tutorial/course video ke liye \"samjho\", \"summarize\" ya \"tutorial\" likhein." }]);
           setText(command);
           return;
         }
-        const { frames } = await captureVideoFrames(source, sceneAt);
+        if (tutorialMode) {
+          setMsgs((m) => [...m, { role: "brain", text: "Poora video analyze ho raha hai… frames nikal rahe hoon (1-2 minute)" }]);
+          const { frames, duration } = await captureFullVideoFrames(source);
+          const tutorial = await analyzeTutorialVideo({ data: { command, frames, duration } });
+          const chaptersText = tutorial.chapters.map((c) => `${c.time} — ${c.title}`).join("\n");
+          const keyPointsText = tutorial.keyPoints.map((p) => `• ${p}`).join("\n");
+          const note = `Tutorial reference: ${tutorial.title}. Topic: ${tutorial.topic}. Difficulty: ${tutorial.difficulty}. Language: ${tutorial.language}. Key points: ${tutorial.keyPoints.join("; ")}. Adaptation: ${tutorial.adaptation}. Do not copy the original content.`;
+          setReferenceNote(note);
+          setMsgs((m) => [...m, { role: "brain", text: `${tutorial.title}\n\nTopic: ${tutorial.topic}\nLanguage: ${tutorial.language} · Difficulty: ${tutorial.difficulty}\n\nSummary:\n${tutorial.summary}\n\nKey points:\n${keyPointsText}\n\nChapters:\n${chaptersText}\n\nNaye content ke liye: ${tutorial.adaptation}`, tutorial }]);
+          setVideoFile(null);
+          setVideoLink("");
+          return;
+        }
+        const { frames } = await captureVideoFrames(source, sceneAt!);
         let audioDataUrl: string | null = null;
         try {
-          const audioResult = await captureVideoAudio(source, sceneAt);
+          const audioResult = await captureVideoAudio(source, sceneAt!);
           audioDataUrl = audioResult.audioDataUrl;
         } catch {
           audioDataUrl = null;
         }
-        const analysis = await analyzeVideoScene({ data: { command, sceneAt, frames, audioDataUrl } });
+        const analysis = await analyzeVideoScene({ data: { command, sceneAt: sceneAt!, frames, audioDataUrl } });
         const speechLine = analysis.speech && analysis.speech.trim().length > 0 ? `\nBol chaal: ${analysis.speech}` : "";
         const note = `Reference at ${sceneAt}s: ${analysis.movement}; expression: ${analysis.expression}.${speechLine ? ` Speech: ${analysis.speech}.` : ""} Original adaptation: ${analysis.adaptation}. Do not copy the original person or footage.`;
         setReferenceNote(note);
@@ -210,6 +225,7 @@ export function ResearchChat({
           <p className="rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground">
             Misal: "USA audience ke liye New York travel vlog, realistic western style" ya "Japanese
             audience ke liye Python course ka pehla lesson" ya "ek snake game banao" ya "meri dukaan ki website banao"
+            ya video lagao kar "ye tutorial samjho" ya "is course ka khulasa do" likhein
           </p>
         ) : null}
         {msgs.map((m, i) =>
@@ -231,6 +247,23 @@ export function ResearchChat({
                 </ul>
               ) : null}
               {m.build ? <BuildPreview build={m.build} /> : null}
+              {m.tutorial ? (
+                <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs">
+                  <div className="mb-2 flex flex-wrap gap-1.5">
+                    <span className="rounded-full bg-primary/10 px-2 py-0.5 font-semibold text-primary">{m.tutorial.language}</span>
+                    <span className="rounded-full bg-accent/20 px-2 py-0.5 font-semibold text-accent-foreground">{m.tutorial.difficulty}</span>
+                  </div>
+                  <p className="mb-2 font-semibold">Chapters:</p>
+                  <ul className="space-y-1">
+                    {m.tutorial.chapters.map((ch, j) => (
+                      <li key={j} className="flex gap-2">
+                        <span className="font-mono text-muted-foreground">{ch.time}</span>
+                        <span>{ch.title}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
               {m.plan ? (
                 <p className="text-xs text-muted-foreground">
                   {m.plan.platform} · {m.plan.audience} · {m.plan.niche} — neeche plan aur scenes dekhein
