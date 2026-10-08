@@ -1,9 +1,9 @@
 export type VideoFrame = { at: number; dataUrl: string };
 
-export function parseSceneTime(command: string): number | null {
-  const words = command.match(/\b(\d{1,3})\s*(?:min(?:ute)?s?\.?|منٹ)\s*(\d{1,2})\s*(?:sec(?:ond)?s?\.?|سیکنڈ)?(?=\b|\s|$)/i);
+export function parseSceneTime(rawCommand: string): number | null {
+  const words = rawCommand.match(/\b(\d{1,3})\s*(?:min(?:ute)?s?\.?|منٹ)\s*(\d{1,2})\s*(?:sec(?:ond)?s?\.?|سیکنڈ)?(?=\b|\s|$)/i);
   if (words && Number(words[2]) < 60) return Number(words[1]) * 60 + Number(words[2]);
-  const clock = command.match(/\b(\d{1,3}):(\d{2})\b/);
+  const clock = rawCommand.match(/\b(\d{1,3}):(\d{2})\b/);
   if (clock && Number(clock[2]) < 60) return Number(clock[1]) * 60 + Number(clock[2]);
   return null;
 }
@@ -58,5 +58,88 @@ export async function captureVideoFrames(source: File | string, sceneAt: number)
     video.removeAttribute("src");
     video.load();
     if (objectUrl) URL.revokeObjectURL(objectUrl);
+  }
+}
+
+export async function captureVideoAudio(source: File | string, sceneAt: number): Promise<{ audioDataUrl: string | null }> {
+  if (typeof source === "string") {
+    return { audioDataUrl: null };
+  }
+  const video = document.createElement("video");
+  video.preload = "auto";
+  video.playsInline = true;
+  const objectUrl = URL.createObjectURL(source);
+  const waitFor = (event: string) => new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => { cleanup(); reject(new Error("Audio load nahi hua.")); }, 20000);
+    const ok = () => { cleanup(); resolve(); };
+    const fail = () => { cleanup(); reject(new Error("Is video ka audio nahi parh saka.")); };
+    const cleanup = () => { clearTimeout(timer); video.removeEventListener(event, ok); video.removeEventListener("error", fail); };
+    video.addEventListener(event, ok, { once: true });
+    video.addEventListener("error", fail, { once: true });
+  });
+  try {
+    video.src = objectUrl;
+    video.load();
+    if (video.readyState < 1) await waitFor("loadedmetadata");
+    const duration = video.duration;
+    if (!Number.isFinite(duration) || duration <= 0) return { audioDataUrl: null };
+    const start = Math.max(0, sceneAt - 3);
+    const end = Math.min(duration, sceneAt + 3);
+    const clipDuration = end - start;
+    if (clipDuration <= 0) return { audioDataUrl: null };
+
+    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const audioCtx = new AudioCtx();
+    const dest = audioCtx.createMediaStreamDestination();
+    const sourceNode = audioCtx.createMediaElementSource(video);
+    sourceNode.connect(dest);
+    sourceNode.connect(audioCtx.destination);
+
+    const recorder = new MediaRecorder(dest.stream, { mimeType: "audio/webm" });
+    const chunks: Blob[] = [];
+    recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+
+    const seekReady = waitFor("seeked");
+    video.currentTime = start;
+    await seekReady;
+
+    const recordingDone = new Promise<void>((resolve) => {
+      recorder.onstop = () => resolve();
+    });
+    recorder.start();
+    video.muted = false;
+    await video.play();
+    await new Promise<void>((resolve) => {
+      const checkEnd = () => {
+        if (video.currentTime >= end || video.ended) {
+          video.pause();
+          resolve();
+        } else {
+          requestAnimationFrame(checkEnd);
+        }
+      };
+      checkEnd();
+    });
+    recorder.stop();
+    await recordingDone;
+    video.muted = true;
+    audioCtx.close();
+
+    if (!chunks.length) return { audioDataUrl: null };
+    const blob = new Blob(chunks, { type: "audio/webm" });
+    if (blob.size > 500_000) return { audioDataUrl: null };
+    const audioDataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(new Error("Audio read nahi ho saka."));
+      reader.readAsDataURL(blob);
+    });
+    return { audioDataUrl };
+  } catch {
+    return { audioDataUrl: null };
+  } finally {
+    video.removeAttribute("src");
+    video.load();
+    URL.revokeObjectURL(objectUrl);
   }
 }

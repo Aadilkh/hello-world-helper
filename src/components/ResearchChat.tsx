@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Brain, ImagePlus, Loader2, Mic, Send, X, Video, Link as LinkIcon } from "lucide-react";
 import { researchAndPlan, uploadReference } from "@/lib/brain.functions";
 import { analyzeVideoScene } from "@/lib/video-reference.functions";
-import { captureVideoFrames, parseSceneTime } from "@/lib/video-reference";
+import { captureVideoFrames, captureVideoAudio, parseSceneTime } from "@/lib/video-reference";
 import type { PlanResult } from "@/lib/brain.functions";
 import { buildProject, classifyCommand, runAutonomousDevelopment } from "@/lib/upgrade.functions";
 import type { BuildResult, Step } from "@/lib/upgrade.functions";
@@ -84,10 +84,18 @@ export function ResearchChat({
           return;
         }
         const { frames } = await captureVideoFrames(source, sceneAt);
-        const analysis = await analyzeVideoScene({ data: { command, sceneAt, frames } });
-        const note = `Reference at ${sceneAt}s: ${analysis.movement}; expression: ${analysis.expression}. Original adaptation: ${analysis.adaptation}. Do not copy the original person or footage.`;
+        let audioDataUrl: string | null = null;
+        try {
+          const audioResult = await captureVideoAudio(source, sceneAt);
+          audioDataUrl = audioResult.audioDataUrl;
+        } catch {
+          audioDataUrl = null;
+        }
+        const analysis = await analyzeVideoScene({ data: { command, sceneAt, frames, audioDataUrl } });
+        const speechLine = analysis.speech && analysis.speech.trim().length > 0 ? `\nBol chaal: ${analysis.speech}` : "";
+        const note = `Reference at ${sceneAt}s: ${analysis.movement}; expression: ${analysis.expression}.${speechLine ? ` Speech: ${analysis.speech}.` : ""} Original adaptation: ${analysis.adaptation}. Do not copy the original person or footage.`;
         setReferenceNote(note);
-        setMsgs((m) => [...m, { role: "brain", text: `${analysis.summary}\n\nMovement: ${analysis.movement}\nExpressions: ${analysis.expression}\nNaye content ke liye: ${analysis.adaptation}\n\n${analysis.limitations}` }]);
+        setMsgs((m) => [...m, { role: "brain", text: `${analysis.summary}\n\nMovement: ${analysis.movement}\nExpressions: ${analysis.expression}${speechLine}\nNaye content ke liye: ${analysis.adaptation}\n\n${analysis.limitations}` }]);
         setVideoFile(null);
         setVideoLink("");
         return;
