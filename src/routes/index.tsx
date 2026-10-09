@@ -4,7 +4,6 @@ import { useState } from "react";
 import {
   Activity,
   ArrowUpRight,
-  Bot,
   BookOpen,
   Brain,
   Check,
@@ -29,7 +28,6 @@ import {
   Search,
   Settings2,
   Sparkles,
-  TestTube2,
   WandSparkles,
   X,
 } from "lucide-react";
