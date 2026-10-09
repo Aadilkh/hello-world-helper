@@ -26,8 +26,10 @@ type Msg = { role: "user" | "brain"; text: string; plan?: PlanResult; steps?: St
 
 export function ResearchChat({
   onPlan,
+  onBuild,
 }: {
   onPlan: (plan: PlanResult) => void;
+  onBuild?: (build: BuildResult | null) => void;
 }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState("");
@@ -125,6 +127,7 @@ export function ResearchChat({
         try {
           const b = await buildProject({ data: { command, previousHtml: lastBuild?.html } });
           setLastBuild(b);
+          onBuild?.(b);
           setMsgs((m) => [...m, { role: "brain", text: b.summary, build: b }]);
         } catch (buildErr) {
           // Self-learning loop: sense the gap, learn it, retry once
@@ -140,6 +143,7 @@ export function ResearchChat({
             ]);
             const b = await buildProject({ data: { command, previousHtml: lastBuild?.html } });
             setLastBuild(b);
+            onBuild?.(b);
             setMsgs((m) => [...m, { role: "brain", text: b.summary, build: b }]);
           } else {
             throw buildErr;
