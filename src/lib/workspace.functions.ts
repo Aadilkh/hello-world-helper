@@ -268,3 +268,120 @@ window.addEventListener('click',()=>{if(deferredPrompt){deferredPrompt.prompt();
 
     return { manifest, html: pwaHtml, fileName };
   });
+
+// ---------- Full Vision Pilot PWA Bundle ----------
+
+export type BundleResult = { html: string; fileName: string; sizeKb: number };
+
+export const bundleVisionPilot = createServerFn({ method: "POST" }).handler(async (): Promise<BundleResult> => {
+  const appName = "Vision Pilot";
+  const fileName = "vision-pilot";
+
+  // SVG icon encoded as data URI (192x192 and 512x512 from same SVG)
+  const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="#0d5c4b"/><rect x="96" y="128" width="320" height="256" rx="24" fill="none" stroke="#f4bd32" stroke-width="16"/><circle cx="160" cy="192" r="14" fill="#f4bd32"/><circle cx="352" cy="192" r="14" fill="#f4bd32"/><path d="M176 320 L256 224 L336 320 Z" fill="#f4bd32"/><text x="256" y="420" font-family="sans-serif" font-size="48" font-weight="bold" fill="#f4bd32" text-anchor="middle">VP</text></svg>`;
+  const iconDataUri = `data:image/svg+xml;base64,${btoa(iconSvg)}`;
+
+  const manifest = JSON.stringify({
+    name: appName,
+    short_name: "VisionPilot",
+    description: "AI creative workspace — video, app aur content banayein",
+    start_url: "/",
+    scope: "/",
+    display: "standalone",
+    orientation: "portrait",
+    background_color: "#f5f8f5",
+    theme_color: "#0d5c4b",
+    categories: ["productivity", "entertainment", "business"],
+    lang: "ur",
+    dir: "auto",
+    icons: [
+      { src: iconDataUri, sizes: "192x192", type: "image/svg+xml", purpose: "any maskable" },
+      { src: iconDataUri, sizes: "512x512", type: "image/svg+xml", purpose: "any maskable" },
+    ],
+  }, null, 2);
+
+  const manifestB64 = btoa(manifest);
+
+  // Inline service worker as blob URL (works for standalone HTML file)
+  const swCode = `const CACHE='vision-pilot-v1';self.addEventListener('install',e=>{self.skipWaiting()});self.addEventListener('activate',e=>{e.waitUntil(self.clients.claim())});self.addEventListener('fetch',e=>{e.respondWith(fetch(e.request).catch(()=>caches.match(e.request)))});`;
+
+  const pwaHtml = `<!DOCTYPE html>
+<html lang="ur" dir="auto">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=5.0">
+<meta name="theme-color" content="#0d5c4b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Vision Pilot">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="data:application/manifest+json;base64,${manifestB64}">
+<link rel="apple-touch-icon" href="${iconDataUri}">
+<link rel="icon" href="${iconDataUri}">
+<title>Vision Pilot — Installable App</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--primary:#0d5c4b;--accent:#f4bd32;--bg:#f5f8f5;--card:#fff;--border:#dce8de;--text:#183b32;--muted:#688078}
+body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+.install-card{width:min(440px,100%);background:var(--card);border:1px solid var(--border);border-radius:24px;padding:36px 28px;text-align:center;box-shadow:0 20px 60px #0d5c4b15}
+.app-icon{width:88px;height:88px;border-radius:22px;background:var(--primary);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;box-shadow:0 10px 30px #0d5c4b30}
+.app-icon svg{width:48px;height:48px}
+.app-name{font-size:24px;font-weight:800;letter-spacing:-.03em;margin-bottom:4px}
+.app-tagline{color:var(--muted);font-size:13px;line-height:1.6;margin-bottom:24px}
+.install-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px;border:0;border-radius:14px;background:var(--primary);color:#fff;font-size:15px;font-weight:700;cursor:pointer;transition:.2s}
+.install-btn:hover{background:#0a4a3c;transform:translateY(-1px)}
+.install-btn:disabled{opacity:.5;cursor:default;transform:none}
+.install-btn.installed{background:#22c55e}
+.steps{text-align:left;margin:24px 0;padding:20px;border-radius:14px;background:#f1f8f0}
+.steps h3{font-size:13px;font-weight:700;margin-bottom:12px;color:var(--primary)}
+.steps ol{padding-left:20px}
+.steps li{font-size:12px;line-height:1.7;color:var(--muted);margin-bottom:6px}
+.steps li b{color:var(--text)}
+.feature-row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:20px}
+.feature-chip{padding:6px 12px;border-radius:20px;background:#e8f1ea;color:var(--primary);font-size:11px;font-weight:600}
+.foot{margin-top:16px;font-size:11px;color:var(--muted)}
+.spinner{width:20px;height:20px;border:2.5px solid #ffffff40;border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div class="install-card">
+<div class="app-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none"><rect x="96" y="128" width="320" height="256" rx="24" stroke="#f4bd32" stroke-width="24"/><circle cx="160" cy="192" r="18" fill="#f4bd32"/><circle cx="352" cy="192" r="18" fill="#f4bd32"/><path d="M176 320 L256 224 L336 320 Z" fill="#f4bd32"/></svg></div>
+<div class="app-name">Vision Pilot</div>
+<div class="app-tagline">AI creative workspace — video, app aur content banayein</div>
+<div class="feature-row"><span class="feature-chip">AI Research Brain</span><span class="feature-chip">Video Studio</span><span class="feature-chip">App Builder</span><span class="feature-chip">Code Analysis</span><span class="feature-chip">PWA Packaging</span></div>
+<button class="install-btn" id="installBtn" onclick="handleInstall()">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg>
+<span id="btnText">Install Vision Pilot</span>
+</button>
+<div class="steps" id="manualSteps">
+<h3>Manual install steps:</h3>
+<ol>
+<li><b>Chrome (Android):</b> Browser menu (⋮) → "Install app" ya "Add to Home screen"</li>
+<li><b>Safari (iPhone):</b> Share button (􏱴) → "Add to Home Screen"</li>
+<li><b>Desktop:</b> Address bar mein install icon 􏰖 click karein</li>
+</ol>
+</div>
+<div class="foot">Vision Pilot PWA v1.0 · Offline-ready · Mobile-first</div>
+</div>
+<script>
+let deferredPrompt=null;
+window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();deferredPrompt=e;document.getElementById('installBtn').classList.remove('hidden')});
+window.addEventListener('appinstalled',function(){var b=document.getElementById('installBtn');b.classList.add('installed');document.getElementById('btnText').textContent='Installed! 􏰗';deferredPrompt=null});
+function handleInstall(){
+if(deferredPrompt){deferredPrompt.prompt();deferredPrompt.userChoice.then(function(r){if(r.outcome==='accepted'){var b=document.getElementById('installBtn');b.classList.add('installed');document.getElementById('btnText').textContent='Installed! 􏰗'}deferredPrompt=null})}
+else{alert('Browser menu se "Install app" ya "Add to Home Screen" select karein')}}
+// Register inline service worker via Blob
+try{
+var swBlob=new Blob([\`${swCode}\`],{type:'text/javascript'});
+var swUrl=URL.createObjectURL(swBlob);
+if('serviceWorker' in navigator){navigator.serviceWorker.register(swUrl).catch(function(){})}
+}catch(e){}
+</script>
+</body>
+</html>`;
+
+  const sizeKb = Math.round(pwaHtml.length / 1024);
+  return { html: pwaHtml, fileName, sizeKb };
+});

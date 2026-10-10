@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   analyzeCodeStructure,
   packageApk,
+  bundleVisionPilot,
   listVirtualServers,
   addVirtualServer,
   connectVirtualServer,
@@ -371,7 +372,9 @@ function ServersTab() {
 
 function ApkTab({ lastBuild }: { lastBuild: BuildResult | null }) {
   const [packaging, setPackaging] = useState(false);
+  const [bundling, setBundling] = useState(false);
   const [apkResult, setApkResult] = useState<{ html: string; fileName: string } | null>(null);
+  const [bundleResult, setBundleResult] = useState<{ html: string; fileName: string; sizeKb: number } | null>(null);
 
   async function handlePackage() {
     if (!lastBuild) {
@@ -401,22 +404,92 @@ function ApkTab({ lastBuild }: { lastBuild: BuildResult | null }) {
     URL.revokeObjectURL(a.href);
   }
 
+  async function handleBundle() {
+    setBundling(true);
+    setBundleResult(null);
+    try {
+      const result = await bundleVisionPilot();
+      setBundleResult(result);
+      toast.success("Vision Pilot PWA bundle ready!");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Bundle fail hua");
+    } finally {
+      setBundling(false);
+    }
+  }
+
+  function downloadBundle() {
+    if (!bundleResult) return;
+    const blob = new Blob([bundleResult.html], { type: "text/html" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${bundleResult.fileName}.html`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
   return (
     <div className="vp-dev-section">
+      <div className="vp-pwa-bundle-card">
+        <div className="vp-pwa-bundle-head">
+          <span className="vp-pwa-bundle-icon"><Smartphone size={22} /></span>
+          <div>
+            <p className="text-sm font-semibold">Bundle entire Vision Pilot</p>
+            <p className="text-xs text-muted-foreground">Poora Vision Pilot app ek installable mobile app mein convert karein.</p>
+          </div>
+        </div>
+        <div className="vp-pwa-bundle-features">
+          <span>AI Research Brain</span><span>Video Studio</span><span>App Builder</span><span>Code Analysis</span><span>Virtual Servers</span>
+        </div>
+        <Button className="mt-3 w-full gap-2" disabled={bundling} onClick={handleBundle}>
+          {bundling ? <Loader2 className="h-4 w-4 animate-spin" /> : <Smartphone className="h-4 w-4" />}
+          {bundling ? "Bundling…" : "Bundle Vision Pilot (PWA)"}
+        </Button>
+      </div>
+
+      {bundleResult ? (
+        <div className="vp-pwa-result-card">
+          <div className="vp-pwa-result-head">
+            <CheckCircle2 className="h-5 w-5" />
+            <p className="text-sm font-semibold">Vision Pilot PWA Bundle Ready!</p>
+          </div>
+          <p className="vp-pwa-result-info">
+            Size: {bundleResult.sizeKb} KB · Installable on Android &amp; iPhone · Offline-ready · Service Worker included
+          </p>
+          <p className="vp-pwa-result-desc">
+            Yeh file mobile browser mein khol kar "Add to Home Screen" / "Install app" se install karein. App icon home screen par aayega, standalone mode mein chalega, aur offline bhi kaam karega.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <Button className="gap-2" onClick={downloadBundle}>
+              <Download className="h-4 w-4" /> Download PWA Bundle
+            </Button>
+          </div>
+          <div className="vp-pwa-preview-wrap">
+            <iframe
+              title="Vision Pilot PWA Preview"
+              srcDoc={bundleResult.html}
+              sandbox="allow-scripts allow-forms allow-modals"
+            />
+          </div>
+        </div>
+      ) : null}
+
+      <div className="vp-pwa-divider"><span>Ya individual project package karein</span></div>
+
       <div className="rounded-2xl border border-border bg-card p-4">
         <div className="flex items-center gap-3">
           <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 text-primary">
             <Smartphone size={22} />
           </span>
           <div>
-            <p className="text-sm font-semibold">APK / PWA Packaging</p>
-            <p className="text-xs text-muted-foreground">Apne built project ko mobile-installable PWA mein convert karein.</p>
+            <p className="text-sm font-semibold">Individual Project PWA</p>
+            <p className="text-xs text-muted-foreground">Chat mein bana hue project ko mobile-installable PWA mein convert karein.</p>
           </div>
         </div>
 
         {!lastBuild ? (
           <p className="mt-3 rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground">
-            Pehle chat mein koi app, game ya website banayein. Phir yahan aa kar usay APK/PWA mein package karein.
+            Pehle chat mein koi app, game ya website banayein. Phir yahan aa kar usay PWA mein package karein.
           </p>
         ) : (
           <>
@@ -426,7 +499,7 @@ function ApkTab({ lastBuild }: { lastBuild: BuildResult | null }) {
             </div>
             <Button className="mt-3 w-full gap-2" disabled={packaging} onClick={handlePackage}>
               {packaging ? <Loader2 className="h-4 w-4 animate-spin" /> : <Smartphone className="h-4 w-4" />}
-              {packaging ? "Packaging…" : "APK/PWA package karein"}
+              {packaging ? "Packaging…" : "Project PWA package karein"}
             </Button>
           </>
         )}
@@ -436,10 +509,10 @@ function ApkTab({ lastBuild }: { lastBuild: BuildResult | null }) {
         <div className="rounded-2xl border border-primary/40 bg-card p-4">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="h-5 w-5 text-primary" />
-            <p className="text-sm font-semibold">PWA Package Ready!</p>
+            <p className="text-sm font-semibold">Project PWA Ready!</p>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            Yeh PWA file mobile browser mein khul kar "Add to Home Screen" se install ho sakti hai. Yeh standalone app ki tarah chalega.
+            Yeh PWA file mobile browser mein khul kar "Add to Home Screen" se install ho sakti hai.
           </p>
           <div className="mt-3 flex gap-2">
             <Button className="gap-2" onClick={downloadApk}>
