@@ -10,11 +10,23 @@ jobs:
           node-version: 20
       - run: npm install
       - run: npm run build
+      - run: ls -la
+      - run: ls -la dist
       - run: rm -rf android
       - run: npm install @capacitor/core @capacitor/cli @capacitor/android
-      - run: npx cap init hello-world-helper com.aadilkh.helloworld --web-dir=dist || true
+      - name: Create capacitor config
+        run: |
+          cat > capacitor.config.ts << 'EOF'
+          import { CapacitorConfig } from '@capacitor/cli';
+          const config: CapacitorConfig = {
+            appId: 'com.aadilkh.helloworld',
+            appName: 'hello-world-helper',
+            webDir: 'dist',
+          };
+          export default config;
+          EOF
       - run: npx cap add android
-      - run: npx cap sync android
+      - run: npx cap copy android
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
