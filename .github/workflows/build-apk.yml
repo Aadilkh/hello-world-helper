@@ -10,10 +10,11 @@ jobs:
           node-version: 20
       - run: npm install
       - run: npm run build
+      - run: rm -rf android
       - run: npm install @capacitor/core @capacitor/cli @capacitor/android
       - run: npx cap init hello-world-helper com.aadilkh.helloworld --web-dir=dist || true
-      - run: npx cap add android || true
-      - run: npx cap copy android
+      - run: npx cap add android
+      - run: npx cap sync android
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
