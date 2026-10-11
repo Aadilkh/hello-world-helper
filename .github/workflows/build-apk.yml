@@ -13,18 +13,21 @@ jobs:
       - name: Prepare web assets for Capacitor
         run: |
           ls -la
-          echo "---.output content ---"
-          ls -la.output 2>&1 || echo "no.output"
+          echo "---.output check ---"
+          ls -la.output 2>&1 || echo "no.output folder"
           ls -la.output/public 2>&1 || echo "no.output/public"
           rm -rf dist
           mkdir -p dist
-          if [ -d ".output/public" ]; then cp -r.output/public/* dist/; echo "copied.output/public to dist";
-          elif [ -d "build" ]; then cp -r build/* dist/; echo "copied build to dist";
-          elif [ -d "dist-static" ]; then cp -r dist-static/* dist/;
-          elif [ -d ".output" ]; then cp -r.output/* dist/ 2>&1 || true;
-          fi
+          if [ -d ".output/public" ]; then cp -r.output/public/* dist/; echo "copied.output/public";
+          elif [ -d "build" ]; then cp -r build/* dist/;
+          elif [ -d "dist" ]; then echo "dist already exists";
+          else echo "checking.output..."; ls.output; fi
           ls -la dist
-          if [! -f "dist/index.html" ]; then echo '<html><body><h1>Hello World Helper</h1></body></html>' > dist/index.html; fi
+          if [! -f "dist/index.html" ]; then
+            if [ -f ".output/public/index.html" ]; then cp.output/public/index.html dist/;
+            else echo '<html><body><h1>Hello World Helper</h1></body></html>' > dist/index.html;
+            fi
+          fi
       - run: rm -rf android
       - run: npm install @capacitor/core @capacitor/cli @capacitor/android
       - run: |
