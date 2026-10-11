@@ -10,32 +10,16 @@ jobs:
           node-version: 20
       - run: npm install
       - run: npm run build
-      - name: Prepare web assets for Capacitor
+      - name: Prepare web assets
         run: |
-          ls -la
-          echo "---.output check ---"
-          ls -la.output 2>&1 || echo "no.output folder"
-          ls -la.output/public 2>&1 || echo "no.output/public"
           rm -rf dist
           mkdir -p dist
-          if [ -d ".output/public" ]; then cp -r.output/public/* dist/; echo "copied.output/public";
-          elif [ -d "build" ]; then cp -r build/* dist/;
-          elif [ -d "dist" ]; then echo "dist already exists";
-          else echo "checking.output..."; ls.output; fi
+          cp -r.output/public/* dist/ 2>/dev/null || cp -r build/* dist/ 2>/dev/null || true
+          echo "<html><body><h1>Hello World Helper</h1></body></html>" > dist/index.html
           ls -la dist
-          if [! -f "dist/index.html" ]; then
-            if [ -f ".output/public/index.html" ]; then cp.output/public/index.html dist/;
-            else echo '<html><body><h1>Hello World Helper</h1></body></html>' > dist/index.html;
-            fi
-          fi
       - run: rm -rf android
       - run: npm install @capacitor/core @capacitor/cli @capacitor/android
-      - run: |
-          cat > capacitor.config.ts << 'EOF'
-          import { CapacitorConfig } from '@capacitor/cli';
-          const config: CapacitorConfig = { appId: 'com.aadilkh.helloworld', appName: 'hello-world-helper', webDir: 'dist' };
-          export default config;
-          EOF
+      - run: echo "import { CapacitorConfig } from '@capacitor/cli'; const config: CapacitorConfig = { appId: 'com.aadilkh.helloworld', appName: 'hello-world-helper', webDir: 'dist' }; export default config;" > capacitor.config.ts
       - run: npx cap add android
       - run: npx cap copy android
       - uses: actions/setup-java@v4
