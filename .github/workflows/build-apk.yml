@@ -14,12 +14,26 @@ jobs:
         run: |
           rm -rf dist
           mkdir -p dist
-          cp -r.output/public/* dist/ 2>/dev/null || cp -r build/* dist/ 2>/dev/null || true
-          echo "<html><body><h1>Hello World Helper</h1></body></html>" > dist/index.html
+          if [ -d ".output/public" ]; then
+            cp -r.output/public/* dist/
+          fi
+          if [! -f "dist/index.html" ]; then
+            echo "<html><body><h1>Hello World</h1></body></html>" > dist/index.html
+          fi
           ls -la dist
       - run: rm -rf android
       - run: npm install @capacitor/core @capacitor/cli @capacitor/android
-      - run: echo "import { CapacitorConfig } from '@capacitor/cli'; const config: CapacitorConfig = { appId: 'com.aadilkh.helloworld', appName: 'hello-world-helper', webDir: 'dist' }; export default config;" > capacitor.config.ts
+      - name: Create capacitor config
+        run: |
+          cat > capacitor.config.ts << 'EOF'
+          import { CapacitorConfig } from '@capacitor/cli';
+          const config: CapacitorConfig = {
+            appId: 'com.aadilkh.helloworld',
+            appName: 'hello-world-helper',
+            webDir: 'dist'
+          };
+          export default config;
+          EOF
       - run: npx cap add android
       - run: npx cap copy android
       - uses: actions/setup-java@v4
