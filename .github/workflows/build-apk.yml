@@ -17,9 +17,8 @@ jobs:
           if [ -d ".output/public" ]; then
             cp -r.output/public/* dist/
           fi
-          if [! -f "dist/index.html" ]; then
-            echo "<html><body><h1>Hello World</h1></body></html>" > dist/index.html
-          fi
+          ls -la.output/public || true
+          echo "<html><body><h1>Hello World Helper</h1></body></html>" > dist/index.html
           ls -la dist
       - run: rm -rf android
       - run: npm install @capacitor/core @capacitor/cli @capacitor/android
