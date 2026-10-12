@@ -17,7 +17,6 @@ jobs:
           if [ -d ".output/public" ]; then
             cp -r.output/public/* dist/
           fi
-          ls -la.output/public || true
           echo "<html><body><h1>Hello World Helper</h1></body></html>" > dist/index.html
           ls -la dist
       - run: rm -rf android
