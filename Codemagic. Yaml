@@ -1,0 +1,47 @@
+workflows:
+  android-workflow:
+    name: Android APK Build
+    instance_type: mac_mini_m2
+    max_build_duration: 30
+    environment:
+      node: 20
+      java: 17
+    scripts:
+      - name: Install dependencies
+        script: |
+          npm install
+      - name: Build Nuxt web
+        script: |
+          npm run build
+          rm -rf dist
+          mkdir -p dist
+          if [ -d ".output/public" ]; then
+            cp -r .output/public/* dist/
+          else
+            echo "No .output/public found, using fallback"
+          fi
+          ls -la dist
+          echo "<html><body>fallback</body></html>" > dist/index.html || true
+          ls -la dist
+      - name: Setup Capacitor Android
+        script: |
+          rm -rf android
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+          cat > capacitor.config.ts << 'EOF'
+          import { CapacitorConfig } from '@capacitor/cli';
+          const config: CapacitorConfig = {
+            appId: 'com.aadilkh.helloworld',
+            appName: 'hello-world-helper',
+            webDir: 'dist'
+          };
+          export default config;
+          EOF
+          npx cap add android
+          npx cap copy android
+      - name: Build APK
+        script: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+    artifacts:
+      - android/app/build/outputs/apk/debug/*.apk
