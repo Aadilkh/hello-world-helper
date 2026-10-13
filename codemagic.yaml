@@ -23,6 +23,13 @@ workflows:
           printf "import { CapacitorConfig } from '@capacitor/cli';\nconst config: CapacitorConfig = { appId: 'com.aadilkh.helloworld', appName: 'hello-world-helper', webDir: 'dist' };\nexport default config;" > capacitor.config.ts
           npx cap add android
           npx cap copy android
+      - name: Fix duplicate kotlin classes
+        script: |
+          cd android
+          # Fix kotlin duplicate issue
+          echo "Fixing gradle..."
+          printf "\nconfigurations.all {\n  exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'\n  exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'\n}\n" >> app/build.gradle
+          cat app/build.gradle
       - name: Build APK
         script: |
           cd android
