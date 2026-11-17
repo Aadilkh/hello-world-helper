@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-
-const GATEWAY = "https://ai.gateway.lovable.dev/v1";
+import { geminiJson } from "@/lib/gemini";
 
 export type SearchHit = { title: string; url: string; snippet: string };
 
@@ -23,79 +22,6 @@ export type PlanResult = {
   audience: string;
   niche: string;
 };
-
-// ---------- gateway helpers ----------
-
-function gatewayHeaders(): Record<string, string> {
-  const key = process.env["LOVABLE_API_KEY"];
-  if (!key) throw new Error("AI key missing. Lovable AI is not configured.");
-  return {
-    "Content-Type": "application/json",
-    "Lovable-API-Key": key,
-    "X-Lovable-AIG-SDK": "fetch",
-  };
-}
-
-async function readGatewayError(res: Response): Promise<Error> {
-  const err = (await res.json().catch(() => null)) as
-    | { message?: string; error?: { message?: string } }
-    | null;
-  const message = err?.message ?? err?.error?.message ?? null;
-  return new Error(message ?? `AI request failed (${res.status})`);
-}
-
-async function callResponses(body: Record<string, unknown>): Promise<string> {
-  const res = await fetch(`${GATEWAY}/responses`, {
-    method: "POST",
-    headers: gatewayHeaders(),
-    body: JSON.stringify({ stream: true, ...body }),
-  });
-  if (!res.ok || !res.body) throw await readGatewayError(res);
-
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let text = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith("data:")) continue;
-      const payload = trimmed.slice(5).trim();
-      if (!payload || payload === "[DONE]") continue;
-      let evt: Record<string, unknown>;
-      try {
-        evt = JSON.parse(payload);
-      } catch {
-        continue;
-      }
-      if (evt["type"] === "response.output_text.delta" && typeof evt["delta"] === "string") {
-        text += evt["delta"];
-      } else if (evt["type"] === "response.failed") {
-        const respErr = (evt["response"] as Record<string, unknown> | undefined)?.["error"] as
-          | Record<string, unknown>
-          | undefined;
-        throw new Error((respErr?.["message"] as string | undefined) ?? "AI request failed");
-      } else if (evt["type"] === "error") {
-        throw new Error((evt["message"] as string | undefined) ?? "AI request failed");
-      }
-    }
-  }
-  return text;
-}
-
-async function callJson<T>(body: Record<string, unknown>): Promise<T> {
-  const text = await callResponses(body);
-  try {
-    return JSON.parse(text) as T;
-  } catch {
-    throw new Error("AI ka jawab parse nahi ho saka — dobara koshish karein");
-  }
-}
 
 // ---------- web research ----------
 
@@ -209,9 +135,8 @@ export const researchAndPlan = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => PlanInput.parse(input))
   .handler(async ({ data }): Promise<PlanResult> => {
     // --- Step 1: understand the command, pick research queries ---
-    const meta = await callJson<Meta>({
-      model: "openai/gpt-6-astra",
-      input: [
+    const meta = await geminiJson<Meta>(
+      [
         "You are the planning brain of a monetization-first video studio.",
         "Read the user's command (it may be in Roman Urdu, Urdu, English, Japanese or any language) and decide the targets.",
         data.platform === "auto" ? "" : `The user forced platform: ${data.platform}.`,
@@ -225,36 +150,20 @@ export const researchAndPlan = createServerFn({ method: "POST" })
       ]
         .filter(Boolean)
         .join("\n"),
-      reasoning: { effort: "low", summary: "auto" },
-      include: ["reasoning.encrypted_content"],
-      text: {
-        format: {
-          type: "json_schema",
-          name: "plan_meta",
-          strict: true,
-          schema: {
-            type: "object",
-            additionalProperties: false,
-            required: [
-              "replyLanguage",
-              "narrationLanguage",
-              "platform",
-              "audience",
-              "niche",
-              "searchQueries",
-            ],
-            properties: {
-              replyLanguage: { type: "string" },
-              narrationLanguage: { type: "string" },
-              platform: { type: "string", enum: ["youtube", "tiktok", "instagram", "facebook", "x"] },
-              audience: { type: "string" },
-              niche: { type: "string" },
-              searchQueries: { type: "array", items: { type: "string" } },
-            },
-          },
+      {
+        type: "object",
+        additionalProperties: false,
+        required: ["replyLanguage", "narrationLanguage", "platform", "audience", "niche", "searchQueries"],
+        properties: {
+          replyLanguage: { type: "string" },
+          narrationLanguage: { type: "string" },
+          platform: { type: "string", enum: ["youtube", "tiktok", "instagram", "facebook", "x"] },
+          audience: { type: "string" },
+          niche: { type: "string" },
+          searchQueries: { type: "array", items: { type: "string" } },
         },
       },
-    });
+    );
 
     const platform = data.platform === "auto" ? meta.platform : data.platform;
 
@@ -282,9 +191,8 @@ export const researchAndPlan = createServerFn({ method: "POST" })
       .join("\n\n");
 
     // --- Step 3: monetization-first plan + script ---
-    const plan = await callJson<Plan>({
-      model: "openai/gpt-6-astra",
-      input: [
+    const plan = await geminiJson<Plan>(
+      [
         "You are 'Vision Pilot Dev Master' — a monetization-first video director and researcher.",
         "",
         `User command: ${data.command}`,
@@ -313,64 +221,51 @@ export const researchAndPlan = createServerFn({ method: "POST" })
       ]
         .filter(Boolean)
         .join("\n"),
-      reasoning: { effort: "medium", summary: "auto" },
-      include: ["reasoning.encrypted_content"],
-      text: {
-        format: {
-          type: "json_schema",
-          name: "content_plan",
-          strict: true,
-          schema: {
+      {
+        type: "object",
+        additionalProperties: false,
+        required: ["reply", "title", "hook", "aspectRatio", "monetization", "evidence", "scenes"],
+        properties: {
+          reply: { type: "string" },
+          title: { type: "string" },
+          hook: { type: "string" },
+          aspectRatio: { type: "string", enum: ["9:16", "16:9"] },
+          monetization: {
             type: "object",
             additionalProperties: false,
-            required: ["reply", "title", "hook", "aspectRatio", "monetization", "evidence", "scenes"],
+            required: ["verdict", "rpmNote", "rules", "avoid"],
             properties: {
-              reply: { type: "string" },
-              title: { type: "string" },
-              hook: { type: "string" },
-              aspectRatio: { type: "string", enum: ["9:16", "16:9"] },
-              monetization: {
-                type: "object",
-                additionalProperties: false,
-                required: ["verdict", "rpmNote", "rules", "avoid"],
-                properties: {
-                  verdict: { type: "string" },
-                  rpmNote: { type: "string" },
-                  rules: { type: "array", items: { type: "string" } },
-                  avoid: { type: "array", items: { type: "string" } },
-                },
-              },
-              evidence: {
-                type: "array",
-                items: {
-                  type: "object",
-                  additionalProperties: false,
-                  required: ["title", "url", "note"],
-                  properties: {
-                    title: { type: "string" },
-                    url: { type: "string" },
-                    note: { type: "string" },
-                  },
-                },
-              },
-              scenes: {
-                type: "array",
-                items: {
-                  type: "object",
-                  additionalProperties: false,
-                  required: ["visual", "narration", "durationSeconds"],
-                  properties: {
-                    visual: { type: "string" },
-                    narration: { type: "string" },
-                    durationSeconds: { type: "integer" },
-                  },
-                },
+              verdict: { type: "string" },
+              rpmNote: { type: "string" },
+              rules: { type: "array", items: { type: "string" } },
+              avoid: { type: "array", items: { type: "string" } },
+            },
+          },
+          evidence: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["title", "url", "note"],
+              properties: { title: { type: "string" }, url: { type: "string" }, note: { type: "string" } },
+            },
+          },
+          scenes: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["visual", "narration", "durationSeconds"],
+              properties: {
+                visual: { type: "string" },
+                narration: { type: "string" },
+                durationSeconds: { type: "integer" },
               },
             },
           },
         },
       },
-    });
+    );
 
     const scenes = (plan.scenes ?? [])
       .filter((s) => s && typeof s.visual === "string" && s.visual.trim().length > 0)

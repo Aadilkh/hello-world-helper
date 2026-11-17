@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-
-const GATEWAY = "https://ai.gateway.lovable.dev/v1";
+import { geminiJson } from "@/lib/gemini";
 
 // ---------- shared types ----------
 
@@ -23,91 +22,10 @@ export type ClipRow = {
   progress: number;
   started_at: string | null;
   url: string | null;
+  mode: string | null;
 };
 
-// ---------- helpers (server-side only) ----------
-
-function gatewayHeaders(): Record<string, string> {
-  const key = process.env["LOVABLE_API_KEY"];
-  if (!key) throw new Error("AI key missing. Lovable AI is not configured.");
-  return {
-    "Content-Type": "application/json",
-    "Lovable-API-Key": key,
-    "X-Lovable-AIG-SDK": "fetch",
-  };
-}
-
-async function readGatewayError(res: Response): Promise<Error> {
-  const err = await res.json().catch(() => null);
-  const message = (err && (err.message ?? err.error?.message)) || null;
-  return new Error(message ?? `AI request failed (${res.status})`);
-}
-
-// Streams the Responses API call server-side and returns the final text.
-async function callResponses(body: Record<string, unknown>): Promise<string> {
-  const res = await fetch(`${GATEWAY}/responses`, {
-    method: "POST",
-    headers: gatewayHeaders(),
-    body: JSON.stringify({ stream: true, ...body }),
-  });
-  if (!res.ok || !res.body) throw await readGatewayError(res);
-
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let text = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith("data:")) continue;
-      const payload = trimmed.slice(5).trim();
-      if (!payload || payload === "[DONE]") continue;
-      let evt: Record<string, unknown>;
-      try {
-        evt = JSON.parse(payload);
-      } catch {
-        continue;
-      }
-      if (evt["type"] === "response.output_text.delta" && typeof evt["delta"] === "string") {
-        text += evt["delta"];
-      } else if (evt["type"] === "response.failed") {
-        const respErr = (evt["response"] as Record<string, unknown> | undefined)?.["error"] as
-          | Record<string, unknown>
-          | undefined;
-        throw new Error((respErr?.["message"] as string | undefined) ?? "AI ne script nahi bana saki");
-      } else if (evt["type"] === "error") {
-        throw new Error((evt["message"] as string | undefined) ?? "AI request failed");
-      }
-    }
-  }
-  return text;
-}
-
-function normalizeScenes(raw: unknown): ScriptScene[] {
-  if (!Array.isArray(raw)) return [];
-  const scenes: ScriptScene[] = [];
-  for (const item of raw) {
-    if (!item || typeof item !== "object") continue;
-    const o = item as Record<string, unknown>;
-    const visual = typeof o["visual"] === "string" ? o["visual"] : "";
-    const narration = typeof o["narration"] === "string" ? o["narration"] : "";
-    if (!visual) continue;
-    const dur = Number(o["durationSeconds"] ?? o["duration_seconds"] ?? 8);
-    scenes.push({
-      visual,
-      narration,
-      durationSeconds: Math.min(10, Math.max(3, Number.isFinite(dur) ? Math.round(dur) : 8)),
-    });
-  }
-  return scenes.slice(0, 3);
-}
-
-// ---------- AI script generation ----------
+// ---------- AI script generation (Gemini) ----------
 
 const GenerateScriptInput = z.object({
   idea: z.string().min(3).max(2000),
@@ -136,50 +54,34 @@ export const generateScript = createServerFn({ method: "POST" })
       'Return JSON only, shaped as {"title": string, "hook": string, "scenes": [{"visual": string, "narration": string, "durationSeconds": number}]}',
     ].join("\n");
 
-    const text = await callResponses({
-      model: "openai/gpt-6-astra",
-      input: prompt,
-      reasoning: { effort: "low", summary: "auto" },
-      include: ["reasoning.encrypted_content"],
-      text: {
-        format: {
-          type: "json_schema",
-          name: "video_script",
-          strict: true,
-          schema: {
+    const parsed = await geminiJson<{
+      title: string;
+      hook: string;
+      scenes: ScriptScene[];
+    }>(prompt, {
+      type: "object",
+      additionalProperties: false,
+      required: ["title", "hook", "scenes"],
+      properties: {
+        title: { type: "string" },
+        hook: { type: "string" },
+        scenes: {
+          type: "array",
+          items: {
             type: "object",
             additionalProperties: false,
-            required: ["title", "hook", "scenes"],
+            required: ["visual", "narration", "durationSeconds"],
             properties: {
-              title: { type: "string" },
-              hook: { type: "string" },
-              scenes: {
-                type: "array",
-                items: {
-                  type: "object",
-                  additionalProperties: false,
-                  required: ["visual", "narration", "durationSeconds"],
-                  properties: {
-                    visual: { type: "string" },
-                    narration: { type: "string" },
-                    durationSeconds: { type: "integer" },
-                  },
-                },
-              },
+              visual: { type: "string" },
+              narration: { type: "string" },
+              durationSeconds: { type: "integer" },
             },
           },
         },
       },
     });
 
-    let parsed: Record<string, unknown>;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      throw new Error("Script parse nahi ho saki — dobara koshish karein");
-    }
-
-    const scenes = normalizeScenes(parsed["scenes"]);
+    const scenes = normalizeScenes(parsed.scenes);
     if (scenes.length === 0) throw new Error("AI ne empty script di — dobara koshish karein");
 
     const { data: project, error } = await supabaseAdmin
@@ -189,8 +91,8 @@ export const generateScript = createServerFn({ method: "POST" })
         language: data.language,
         quality: data.quality,
         aspect_ratio: data.aspectRatio,
-        title: typeof parsed["title"] === "string" ? parsed["title"] : data.idea.slice(0, 80),
-        hook: typeof parsed["hook"] === "string" ? parsed["hook"] : "",
+        title: parsed.title || data.idea.slice(0, 80),
+        hook: parsed.hook ?? "",
         scenes,
       })
       .select("*")
@@ -199,13 +101,33 @@ export const generateScript = createServerFn({ method: "POST" })
     return { project };
   });
 
-// ---------- video job creation ----------
+function normalizeScenes(raw: unknown): ScriptScene[] {
+  if (!Array.isArray(raw)) return [];
+  const scenes: ScriptScene[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const o = item as Record<string, unknown>;
+    const visual = typeof o["visual"] === "string" ? o["visual"] : "";
+    const narration = typeof o["narration"] === "string" ? o["narration"] : "";
+    if (!visual) continue;
+    const dur = Number(o["durationSeconds"] ?? o["duration_seconds"] ?? 8);
+    scenes.push({
+      visual,
+      narration,
+      durationSeconds: Math.min(10, Math.max(3, Number.isFinite(dur) ? Math.round(dur) : 8)),
+    });
+  }
+  return scenes.slice(0, 3);
+}
+
+// ---------- video clip creation ----------
 
 const CreateClipInput = z.object({
   projectId: z.string().uuid(),
   sceneIndex: z.number().int().min(0).max(9),
   resolution: z.enum(["360p", "720p", "1080p"]).optional(),
   durationSeconds: z.number().int().min(3).max(10).optional(),
+  mode: z.enum(["veo", "free"]).optional().default("free"),
 });
 
 export const createClipJob = createServerFn({ method: "POST" })
@@ -239,12 +161,6 @@ export const createClipJob = createServerFn({ method: "POST" })
         : rawLang.toLowerCase() === "english"
           ? "English"
           : rawLang.charAt(0).toUpperCase() + rawLang.slice(1);
-    const videoPrompt = [
-      scene.visual.trim() + ".",
-      `The narrator says in ${langName}: ${scene.narration}`,
-      `Audio: a clear ${langName} speaking voice, subtle cinematic ambient music.`,
-      "In a single continuous shot, no scene cuts. No captions, no on-screen text.",
-    ].join(" ");
 
     const duration = Math.min(
       10,
@@ -252,7 +168,6 @@ export const createClipJob = createServerFn({ method: "POST" })
     );
     const resolution = data.resolution ?? (project.quality === "hd" ? "720p" : "360p");
 
-    // Upsert the clip row first so a failed create is visible as failed.
     let clip = existing;
     if (!clip) {
       const { data: created, error } = await supabaseAdmin
@@ -260,11 +175,12 @@ export const createClipJob = createServerFn({ method: "POST" })
         .insert({
           project_id: data.projectId,
           scene_index: data.sceneIndex,
-          prompt: videoPrompt,
+          prompt: scene.visual,
           duration_seconds: duration,
           resolution,
           status: "pending",
           progress: 0,
+          mode: data.mode,
         })
         .select("*")
         .single();
@@ -273,80 +189,98 @@ export const createClipJob = createServerFn({ method: "POST" })
     } else {
       await supabaseAdmin
         .from("video_clips")
-        .update({ duration_seconds: duration, resolution, prompt: videoPrompt })
+        .update({ duration_seconds: duration, resolution, mode: data.mode })
         .eq("id", clip.id);
     }
 
-    // Reference photos (from the chat studio) → inline image parts
-    const refPaths = ((project as { ref_image_paths?: string[] | null }).ref_image_paths ?? []).slice(0, 3);
-    const imageParts: Array<{ type: "image"; data: string; mime_type: string }> = [];
-    for (const p of refPaths) {
-      const { data: blob } = await supabaseAdmin.storage.from("generated-videos").download(p);
-      if (!blob) continue;
-      const buf = new Uint8Array(await blob.arrayBuffer());
-      let bin = "";
-      for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
-      const mime = p.endsWith(".png") ? "image/png" : p.endsWith(".webp") ? "image/webp" : "image/jpeg";
-      imageParts.push({ type: "image", data: btoa(bin), mime_type: mime });
-    }
-    const input =
-      imageParts.length > 0
-        ? [
-            ...imageParts,
-            {
-              type: "text",
-              text:
-                imageParts.map((_, i) => `<IMAGE_REF_${i}>`).join(" ") +
-                " are reference photos of the subject/look to keep. " +
-                videoPrompt,
-            },
-          ]
-        : videoPrompt;
-
-    const res = await fetch(`${GATEWAY}/videos`, {
-      method: "POST",
-      headers: gatewayHeaders(),
-      body: JSON.stringify({
-        model: "google/gemini-omni-1.1-flash",
-        input,
-        response_format: {
-          type: "video",
-          resolution,
-          duration: `${duration}s`,
-          aspect_ratio: project.aspect_ratio,
-        },
-      }),
-    });
-
-    if (!res.ok) {
-      const err = await readGatewayError(res);
-      await supabaseAdmin
-        .from("video_clips")
-        .update({ status: "failed", error: err.message })
-        .eq("id", clip.id);
-      throw err;
+    if (data.mode === "veo") {
+      throw new Error("Veo video generation abhi setup nahi hai. Free Mode use karein.");
     }
 
-    const job = (await res.json()) as { id?: string };
-    if (!job.id) throw new Error("Video job start nahi hua");
-
-    const { data: updated, error } = await supabaseAdmin
+    // ---- Free Mode: stock photo search + TTS narration ----
+    const { data: updated, error: upErr } = await supabaseAdmin
       .from("video_clips")
-      .update({
-        job_id: job.id,
-        status: "in_progress",
-        error: null,
-        progress: 5,
-        started_at: new Date().toISOString(),
-      })
+      .update({ status: "in_progress", progress: 10, started_at: new Date().toISOString() })
       .eq("id", clip.id)
       .select("*")
       .single();
-    if (error) throw new Error(error.message);
-    return { clip: updated };
+    if (upErr) throw new Error(upErr.message);
+
+    const stockPhotos = await searchStockPhotos(scene.visual, 3);
+    const audioBase64 = await synthesizeTTS(scene.narration, langName);
+
+    const path = `clips/${clip.id}.json`;
+    const clipData = {
+      photos: stockPhotos,
+      audioBase64,
+      narration: scene.narration,
+      duration,
+      aspectRatio: project.aspect_ratio,
+    };
+    const { error: storeErr } = await supabaseAdmin.storage
+      .from("generated-videos")
+      .upload(path, JSON.stringify(clipData), { contentType: "application/json", upsert: true });
+    if (storeErr) throw new Error(storeErr.message);
+
+    const { data: finalClip } = await supabaseAdmin
+      .from("video_clips")
+      .update({ status: "ready", storage_path: path, error: null, progress: 100 })
+      .eq("id", clip.id)
+      .select("*")
+      .single();
+
+    return { clip: finalClip ?? updated };
   });
 
-// ---------- project reads (also syncs in-flight video jobs) ----------
+async function searchStockPhotos(query: string, count: number): Promise<string[]> {
+  try {
+    const res = await fetch(
+      `https://www.googleapis.com/customsearch/v1?key=${process.env["GEMINI_API_KEY"]}&cx=${process.env["GOOGLE_CSE_ID"] ?? ""}&q=${encodeURIComponent(query)}&searchType=image&num=${count}`,
+    );
+    if (!res.ok) return [];
+    const data = (await res.json()) as { items?: Array<{ link?: string }> };
+    return (data.items ?? []).map((i) => i.link ?? "").filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+async function synthesizeTTS(text: string, langName: string): Promise<string | null> {
+  try {
+    const key = process.env["GEMINI_API_KEY"];
+    if (!key) return null;
+    const langMap: Record<string, string> = {
+      Urdu: "ur-PK",
+      English: "en-US",
+      Japanese: "ja-JP",
+      Hindi: "hi-IN",
+      Arabic: "ar-SA",
+      Spanish: "es-ES",
+      French: "fr-FR",
+      German: "de-DE",
+    };
+    const langCode = langMap[langName] ?? "en-US";
+    const res = await fetch(
+      `https://texttospeech.googleapis.com/v1/text:synthesize?key=${key}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          input: { text },
+          voice: { languageCode: langCode, ssmlGender: "NEUTRAL" },
+          audioConfig: { audioEncoding: "MP3" },
+        }),
+      },
+    );
+    if (!res.ok) return null;
+    const data = (await res.json()) as { audioContent?: string };
+    return data.audioContent ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// ---------- project reads ----------
 
 const GetProjectInput = z.object({ projectId: z.string().uuid() });
 
@@ -363,71 +297,8 @@ type DbClip = {
   storage_path: string | null;
   progress: number;
   started_at: string | null;
+  mode: string | null;
 };
-
-async function syncClip(clip: DbClip): Promise<DbClip> {
-  if (clip.status !== "in_progress" || !clip.job_id) return clip;
-  const res = await fetch(`${GATEWAY}/videos/${clip.job_id}`, {
-    headers: gatewayHeaders(),
-  });
-  if (!res.ok) return clip; // transient — try again on next poll
-  const job = (await res.json()) as {
-    status?: string;
-    progress?: number;
-    error?: { code?: string; message?: string };
-  };
-
-  if (job.status === "in_progress" || job.status === "queued") {
-    const pct = Math.min(95, Math.max(5, Math.round(Number(job.progress) || 0)));
-    if (pct !== clip.progress) {
-      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-      const { data: updated } = await supabaseAdmin
-        .from("video_clips")
-        .update({ progress: pct })
-        .eq("id", clip.id)
-        .select("*")
-        .single();
-      return (updated as unknown as DbClip | null) ?? clip;
-    }
-    return clip;
-  }
-
-
-  if (job.status === "completed") {
-    const videoRes = await fetch(`${GATEWAY}/videos/${clip.job_id}/content`, {
-      headers: gatewayHeaders(),
-    });
-    if (videoRes.ok) {
-      const bytes = new Uint8Array(await videoRes.arrayBuffer());
-      const path = `clips/${clip.id}.mp4`;
-      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-      await supabaseAdmin.storage
-        .from("generated-videos")
-        .upload(path, bytes, { contentType: "video/mp4", upsert: true });
-      const { data: updated } = await supabaseAdmin
-        .from("video_clips")
-        .update({ status: "ready", storage_path: path, error: null, progress: 100 })
-        .eq("id", clip.id as string)
-        .select("*")
-        .single();
-      return updated ?? clip;
-    }
-    return clip;
-  }
-
-  if (job.status === "failed") {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const msg = job.error?.message ?? "Video generation failed";
-    const { data: updated } = await supabaseAdmin
-      .from("video_clips")
-      .update({ status: "failed", error: msg })
-      .eq("id", clip.id as string)
-      .select("*")
-      .single();
-    return updated ?? clip;
-  }
-  return clip;
-}
 
 export const getProject = createServerFn({ method: "GET" })
   .inputValidator((input: unknown) => GetProjectInput.parse(input))
@@ -446,34 +317,30 @@ export const getProject = createServerFn({ method: "GET" })
       .eq("project_id", data.projectId)
       .order("scene_index", { ascending: true });
 
-    const synced: DbClip[] = [];
-    for (const clip of clips ?? []) {
-      synced.push(await syncClip(clip as unknown as DbClip));
-    }
-
-    // Sign URLs for ready clips
     const result: ClipRow[] = [];
-    for (const clip of synced) {
+    for (const clip of clips ?? []) {
+      const c = clip as unknown as DbClip;
       let url: string | null = null;
-      const storagePath = clip.storage_path as string | null;
-      if (clip.status === "ready" && storagePath) {
+      const storagePath = c.storage_path as string | null;
+      if (c.status === "ready" && storagePath) {
         const { data: signed } = await supabaseAdmin.storage
           .from("generated-videos")
           .createSignedUrl(storagePath, 604800);
         url = signed?.signedUrl ?? null;
       }
       result.push({
-        id: clip.id as string,
-        project_id: clip.project_id as string,
-        scene_index: clip.scene_index as number,
-        status: clip.status as string,
-        error: (clip.error as string | null) ?? null,
-        resolution: clip.resolution as string,
+        id: c.id,
+        project_id: c.project_id,
+        scene_index: c.scene_index,
+        status: c.status,
+        error: c.error ?? null,
+        resolution: c.resolution,
         storage_path: storagePath,
-        duration_seconds: clip.duration_seconds as number,
-        progress: (clip.progress as number | null) ?? 0,
-        started_at: (clip.started_at as string | null) ?? null,
+        duration_seconds: c.duration_seconds,
+        progress: c.progress ?? 0,
+        started_at: c.started_at ?? null,
         url,
+        mode: c.mode ?? null,
       });
     }
 

@@ -1,11 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { geminiJson } from "@/lib/gemini";
 
 // VisionPilot Cell 8 — Autonomous Development Engine (web version)
 // Flow: capability_audit → discover_gap → research_request → develop → validate → register.
 // Legacy protection: core capabilities are read-only (never modified, deleted, or recreated).
-
-const GATEWAY = "https://ai.gateway.lovable.dev/v1";
 
 export type Capability = {
   id: string;
@@ -36,53 +35,6 @@ type Db = any;
 async function db(): Promise<Db> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   return supabaseAdmin as Db;
-}
-
-async function aiJson<T>(input: string, name: string, schema: Record<string, unknown>): Promise<T> {
-  const key = process.env["LOVABLE_API_KEY"];
-  if (!key) throw new Error("AI key missing");
-  const res = await fetch(`${GATEWAY}/responses`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Lovable-API-Key": key, "X-Lovable-AIG-SDK": "fetch" },
-    body: JSON.stringify({
-      model: "openai/gpt-6-astra",
-      stream: true,
-      store: false,
-      input,
-      reasoning: { effort: "low", summary: "auto" },
-      include: ["reasoning.encrypted_content"],
-      text: { format: { type: "json_schema", name, strict: true, schema } },
-    }),
-  });
-  if (!res.ok || !res.body) {
-    const e = (await res.json().catch(() => null)) as { message?: string; error?: { message?: string } } | null;
-    throw new Error(e?.message ?? e?.error?.message ?? `AI request failed (${res.status})`);
-  }
-  const reader = res.body.getReader();
-  const dec = new TextDecoder();
-  let buf = "";
-  let text = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    const lines = buf.split("\n");
-    buf = lines.pop() ?? "";
-    for (const line of lines) {
-      const t = line.trim();
-      if (!t.startsWith("data:")) continue;
-      const p = t.slice(5).trim();
-      if (!p || p === "[DONE]") continue;
-      try {
-        const evt = JSON.parse(p) as Record<string, unknown>;
-        if (evt["type"] === "response.output_text.delta" && typeof evt["delta"] === "string") text += evt["delta"];
-        if (evt["type"] === "response.failed" || evt["type"] === "error") throw new Error("AI request failed");
-      } catch (err) {
-        if (err instanceof Error && err.message === "AI request failed") throw err;
-      }
-    }
-  }
-  return JSON.parse(text) as T;
 }
 
 async function webSearch(q: string): Promise<Array<{ title: string; url: string; snippet: string }>> {
@@ -137,7 +89,7 @@ export const runAutonomousDevelopment = createServerFn({ method: "POST" })
     steps.push({ step: "Capability audit", status: "PASS", detail: `${all.length} salahiyatein, ${active.length} active` });
 
     // 2. Gap discovery
-    const gap = await aiJson<{ covered: boolean; coveredBy: string; gap: string; searchQuery: string }>(
+    const gap = await geminiJson<{ covered: boolean; coveredBy: string; gap: string; searchQuery: string }>(
       [
         "You are the gap-discovery module of VisionPilot, an AI video content studio.",
         "Existing capabilities:",
@@ -145,7 +97,6 @@ export const runAutonomousDevelopment = createServerFn({ method: "POST" })
         `New requirement: ${data.requirement}`,
         "covered: true only if an existing capability fully handles it (coveredBy = its name). Otherwise describe the missing gap in one line and give one English web search query to research how to do it well.",
       ].join("\n"),
-      "gap",
       {
         type: "object",
         additionalProperties: false,
@@ -168,7 +119,7 @@ export const runAutonomousDevelopment = createServerFn({ method: "POST" })
     });
 
     // 4. Development (isolated: produces a capability spec, never touches core ones)
-    const dev = await aiJson<{ name: string; description: string; domain: string; instructions: string; keywords: string[] }>(
+    const dev = await geminiJson<{ name: string; description: string; domain: string; instructions: string; keywords: string[] }>(
       [
         "Develop a new capability for VisionPilot's video planning brain to close this gap.",
         `Gap: ${gap.gap}`,
@@ -181,7 +132,6 @@ export const runAutonomousDevelopment = createServerFn({ method: "POST" })
         "instructions: 4-8 concrete, policy-safe rules (English) the brain must follow when planning a video that needs this capability. No harmful, deceptive, or copyright-violating rules.",
         "keywords: 3-8 lowercase trigger words (any language) that indicate a command needs this.",
       ].join("\n"),
-      "capability",
       {
         type: "object",
         additionalProperties: false,
@@ -204,7 +154,7 @@ export const runAutonomousDevelopment = createServerFn({ method: "POST" })
     if (all.some((c) => c.name === name)) problems.push("naam pehle se maujood (legacy protection)");
     if (dev.instructions.trim().length < 40) problems.push("hidayat bohot chhoti");
     if (dev.keywords.length === 0) problems.push("keywords nahi");
-    const review = await aiJson<{ safe: boolean; reason: string }>(
+    const review = await geminiJson<{ safe: boolean; reason: string }>(
       `Review this capability for a public video studio. safe=false if it encourages misleading claims, copyright violation, platform-policy breaking, spam, or harm.\n${dev.instructions}`,
       "review",
       { type: "object", additionalProperties: false, required: ["safe", "reason"], properties: { safe: { type: "boolean" }, reason: { type: "string" } } },
@@ -258,7 +208,7 @@ export const toggleCapability = createServerFn({ method: "POST" })
 export const classifyCommand = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => z.object({ command: z.string().min(1).max(4000) }).parse(i))
   .handler(async ({ data }) => {
-    return aiJson<{ mode: "video" | "upgrade" | "build" | "chat"; reply: string }>(
+    return geminiJson<{ mode: "video" | "upgrade" | "build" | "chat"; reply: string }>(
       [
         "Route this user command for a multi-purpose system (any language).",
         "mode=video: user wants content/video/script/research for a platform.",
@@ -292,7 +242,7 @@ export const buildProject = createServerFn({ method: "POST" })
       .filter((c) => c.instructions && (c.keywords ?? []).some((k) => low.includes(k)))
       .map((c) => `Capability ${c.name}:\n${c.instructions}`)
       .join("\n\n");
-    return aiJson<BuildResult>(
+    return geminiJson<BuildResult>(
       [
         "You are Dev Master, an expert developer. Build exactly what the user asks as ONE self-contained HTML file.",
         learned ? "Apply these learned capabilities where relevant:\n" + learned : "",

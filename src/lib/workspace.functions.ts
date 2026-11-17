@@ -1,62 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-
-const GATEWAY = "https://ai.gateway.lovable.dev/v1";
+import { geminiJson } from "@/lib/gemini";
 
 type Db = Awaited<ReturnType<typeof import("@/integrations/supabase/client.server")>>["supabaseAdmin"];
 
 async function db(): Promise<Db> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   return supabaseAdmin as Db;
-}
-
-async function readStream(res: Response): Promise<string> {
-  const reader = res.body!.getReader();
-  const dec = new TextDecoder();
-  let buf = "", text = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    const lines = buf.split("\n");
-    buf = lines.pop() ?? "";
-    for (const line of lines) {
-      const t = line.trim();
-      if (!t.startsWith("data:")) continue;
-      const p = t.slice(5).trim();
-      if (!p || p === "[DONE]") continue;
-      try {
-        const evt = JSON.parse(p) as Record<string, unknown>;
-        if (evt["type"] === "response.output_text.delta" && typeof evt["delta"] === "string") text += evt["delta"];
-        if (evt["type"] === "response.failed" || evt["type"] === "error") throw new Error("AI request failed");
-      } catch (e) {
-        if (e instanceof Error && e.message === "AI request failed") throw e;
-      }
-    }
-  }
-  return text;
-}
-
-async function aiJson<T>(prompt: string, name: string, schema: Record<string, unknown>): Promise<T> {
-  const key = process.env["LOVABLE_API_KEY"];
-  if (!key) throw new Error("AI service dastiyab nahi hai.");
-  const res = await fetch(`${GATEWAY}/responses`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Lovable-API-Key": key, "X-Lovable-AIG-SDK": "fetch" },
-    body: JSON.stringify({
-      model: "openai/gpt-6-astra", stream: true, store: false,
-      input: prompt,
-      reasoning: { effort: "low", summary: "auto" },
-      include: ["reasoning.encrypted_content"],
-      text: { format: { type: "json_schema", name, strict: true, schema } },
-    }),
-  });
-  if (!res.ok || !res.body) {
-    const e = (await res.json().catch(() => null)) as { message?: string; error?: { message?: string } } | null;
-    throw new Error(e?.message ?? e?.error?.message ?? `AI request failed (${res.status})`);
-  }
-  const text = await readStream(res);
-  return JSON.parse(text) as T;
 }
 
 // ---------- App Connections ----------
@@ -130,7 +80,7 @@ export const analyzeCodeStructure = createServerFn({ method: "POST" })
   .inputValidator((i: unknown) => AnalyzeCodeInput.parse(i))
   .handler(async ({ data }): Promise<CodeAnalysis> => {
     const truncated = data.html.length > 30000 ? data.html.slice(0, 15000) + "\n...\n" + data.html.slice(-15000) : data.html;
-    return aiJson<CodeAnalysis>(
+    return geminiJson<CodeAnalysis>(
       [
         "You are a senior software architect analyzing the coding structure of a built project.",
         data.projectName ? `Project name: ${data.projectName}` : "",
@@ -138,7 +88,6 @@ export const analyzeCodeStructure = createServerFn({ method: "POST" })
         "Return JSON in the user's language (Roman Urdu if the code comments are in Roman Urdu, otherwise English).",
         `Code:\n${truncated}`,
       ].filter(Boolean).join("\n"),
-      "code_analysis",
       {
         type: "object", additionalProperties: false,
         required: ["overview", "architecture", "components", "dataFlow", "strengths", "weaknesses", "suggestions", "techStack"],
