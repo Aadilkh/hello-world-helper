@@ -1,7 +1,7 @@
 // Shared Google Gemini API helper — replaces Lovable AI gateway.
-// Uses GEMINI_API_KEY env var. Model: gemini-2.0-flash.
+// Uses GEMINI_API_KEY env var. Model: gemini-3-flash-preview.
 
-const MODEL = "gemini-3-flash";
+const MODEL = "gemini-3-flash-preview";
 const BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
 type JsonSchema = Record<string, unknown>;
