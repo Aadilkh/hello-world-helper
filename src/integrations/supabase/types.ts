@@ -101,6 +101,7 @@ export type Database = {
           started_at: string | null
           status: string
           storage_path: string | null
+          mode: string
         }
         Insert: {
           created_at?: string
@@ -116,6 +117,7 @@ export type Database = {
           started_at?: string | null
           status?: string
           storage_path?: string | null
+          mode?: string
         }
         Update: {
           created_at?: string
@@ -131,6 +133,7 @@ export type Database = {
           started_at?: string | null
           status?: string
           storage_path?: string | null
+          mode?: string
         }
         Relationships: [
           {
